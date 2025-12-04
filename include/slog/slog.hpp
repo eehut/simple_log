@@ -25,7 +25,7 @@
 #include <cstdio>
 #include <mutex>
 #include <unordered_map>
-
+#include <map>
 
 #include <slog/fmt/format.h>
 
@@ -194,14 +194,42 @@ public:
     /// @param data 数据地址
     /// @param size 数据大小
     /// @param msg 日志消息
-    void dump(LogLevel level, void const *data, size_t size, std::string const &msg);
+    void log_data(LogLevel level, void const *data, size_t size, std::string const &msg);
 
     /// @brief 显示vector中的数据
     /// @param level 
     /// @param data 
     /// @param msg 
-    void dump(LogLevel level, std::vector<uint8_t> const & data, std::string const &msg);
+    void log_data(LogLevel level, std::vector<uint8_t> const & data, std::string const &msg);
 
+    /// @brief 具有限制属性的日志输出方法
+    /// @param tag 限制的标签
+    /// @param allowed_num 允许打印的日志数量
+    /// @param level 日志等级
+    /// @param msg 日志消息
+    void log_limited(std::string const &tag, int allowed_num, LogLevel level, std::string const &msg);
+
+
+    // 以下是基础函数
+    template<typename... Args>
+    void log(LogLevel level, fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log(level, fmt::format(fmt, std::forward<Args>(args)...));        
+    }
+
+    template<typename... Args>
+    void dump(LogLevel level, void const *data, size_t size, fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log_data(level, data, size, fmt::format(fmt, std::forward<Args>(args)...));        
+    }
+
+    template<typename... Args>
+    void dump(LogLevel level, std::vector<uint8_t> const & data, fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log_data(level, data, fmt::format(fmt, std::forward<Args>(args)...));        
+    }
+
+    /// 以下是便捷函数
 
     template<typename... Args>
     void trace(fmt::format_string<Args...> fmt, Args &&... args)
@@ -233,10 +261,64 @@ public:
         log(LogLevel::Error, fmt::format(fmt, std::forward<Args>(args)...));        
     }
 
+    // 日志抑制
+    void reset_limited(std::string const & tag)
+    {
+        auto it = limited_items_.find(tag);
+        if (it != limited_items_.end()){
+            it->second.count = 0;
+        }
+    }
+
+    template<typename... Args>
+    void trace_limited(std::string const &tag, int allowed_num, fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log_limited(tag, allowed_num, LogLevel::Trace, fmt::format(fmt, std::forward<Args>(args)...));
+    }
+
+    template<typename... Args>
+    void debug_limited(std::string const &tag, int allowed_num, fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log_limited(tag, allowed_num, LogLevel::Debug, fmt::format(fmt, std::forward<Args>(args)...));
+    }
+
+    template<typename... Args>
+    void info_limited(std::string const &tag, int allowed_num, fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log_limited(tag, allowed_num, LogLevel::Info, fmt::format(fmt, std::forward<Args>(args)...));
+    }    
+
+    template<typename... Args>
+    void warning_limited(std::string const &tag, int allowed_num, fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log_limited(tag, allowed_num, LogLevel::Warning, fmt::format(fmt, std::forward<Args>(args)...));
+    }    
+
+    template<typename... Args>
+    void error_limited(std::string const &tag, int allowed_num, fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log_limited(tag, allowed_num, LogLevel::Error, fmt::format(fmt, std::forward<Args>(args)...));        
+    }
+
+
 private:
     std::string name_;
     std::shared_ptr<LoggerSink> sink_;
     bool valid_;
+
+    /// 用来管理日志抑制
+    struct LimitedControl
+    {
+        int allowed;
+        int count;
+    };
+    std::map<std::string, LimitedControl> limited_items_;
+
+    /// @brief 检测日志是否允许打印，如果该抑制TAG未创建，将自动创建
+    /// @param tag 抑制的标签
+    /// @param allowed_num 允许打印的日志数量
+    int limited_allowed_left(std::string const &tag, int allowed_num);
+
 };
 
 
@@ -323,6 +405,18 @@ inline void log(LogLevel level, fmt::format_string<Args...> fmt, Args &&...args)
 }
 
 template<typename... Args>
+inline void dump(LogLevel level, void const *data, size_t size, fmt::format_string<Args...> fmt, Args &&... args)
+{
+    default_logger()->log_data(level, data, size, fmt::format(fmt, std::forward<Args>(args)...));        
+}
+
+template<typename... Args>
+inline void dump(LogLevel level, std::vector<uint8_t> const & data, fmt::format_string<Args...> fmt, Args &&... args)
+{
+    default_logger()->log_data(level, data, fmt::format(fmt, std::forward<Args>(args)...));        
+}
+
+template<typename... Args>
 inline void trace(fmt::format_string<Args...> fmt, Args &&...args)
 {
     default_logger()->log(LogLevel::Trace, fmt::format(fmt, std::forward<Args>(args)...));
@@ -350,6 +444,36 @@ template<typename... Args>
 inline void error(fmt::format_string<Args...> fmt, Args &&...args)
 {
     default_logger()->log(LogLevel::Error, fmt::format(fmt, std::forward<Args>(args)...));
+}
+
+template<typename... Args>
+inline void trace_limited(std::string const &tag, int allowed_num, fmt::format_string<Args...> fmt, Args &&...args)
+{
+    default_logger()->log_limited(tag, allowed_num, LogLevel::Trace, fmt::format(fmt, std::forward<Args>(args)...));
+}
+
+template<typename... Args>
+inline void debug_limited(std::string const &tag, int allowed_num, fmt::format_string<Args...> fmt, Args &&...args)
+{
+    default_logger()->log_limited(tag, allowed_num, LogLevel::Debug, fmt::format(fmt, std::forward<Args>(args)...));
+}
+
+template<typename... Args>
+inline void info_limited(std::string const &tag, int allowed_num, fmt::format_string<Args...> fmt, Args &&...args)
+{
+    default_logger()->log_limited(tag, allowed_num, LogLevel::Info, fmt::format(fmt, std::forward<Args>(args)...));
+}
+
+template<typename... Args>
+inline void warning_limited(std::string const &tag, int allowed_num, fmt::format_string<Args...> fmt, Args &&...args)
+{
+    default_logger()->log_limited(tag, allowed_num, LogLevel::Warning, fmt::format(fmt, std::forward<Args>(args)...));
+}
+
+template<typename... Args>
+inline void error_limited(std::string const &tag, int allowed_num, fmt::format_string<Args...> fmt, Args &&...args)
+{
+    default_logger()->log_limited(tag, allowed_num, LogLevel::Error, fmt::format(fmt, std::forward<Args>(args)...));
 }
 
 } // namespace slog

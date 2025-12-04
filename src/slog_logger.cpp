@@ -68,7 +68,7 @@ void Logger::log(LogLevel level, const char* msg) {
     }
 }
 
-void Logger::dump(LogLevel level, void const *data, size_t size, std::string const &msg) {
+void Logger::log_data(LogLevel level, void const *data, size_t size, std::string const &msg) {
     if (!valid_ || !is_allowed(level))
     {
         return;
@@ -103,7 +103,7 @@ void Logger::dump(LogLevel level, void const *data, size_t size, std::string con
     sink_->log(level, msg + hex);    
 }
 
-void Logger::dump(LogLevel level, std::vector<uint8_t> const & data, std::string const &msg) {
+void Logger::log_data(LogLevel level, std::vector<uint8_t> const & data, std::string const &msg) {
     if (!valid_ || !is_allowed(level))
     {
         return;
@@ -135,6 +135,40 @@ void Logger::dump(LogLevel level, std::vector<uint8_t> const & data, std::string
     }
 
     sink_->log(level, msg + hex);
+}
+
+void Logger::log_limited(std::string const &tag, int allowed_num, LogLevel level, std::string const &msg)
+{
+    int left = limited_allowed_left(tag, allowed_num);
+    if (valid_ && is_allowed(level) && (left > 0))
+    {
+        sink_->log(level, (left == 1) ? (msg + " (more messages will be suppressed)") : msg);
+    }
+}
+
+int Logger::limited_allowed_left(std::string const &tag, int allowed_num)
+{
+    auto it = limited_items_.find(tag);
+    if (it == limited_items_.end()) {
+        LimitedControl ctrl;
+        ctrl.allowed = allowed_num;
+        ctrl.count = 0;
+        limited_items_.insert(std::make_pair(tag, ctrl));
+    }
+
+    auto & ctrl = limited_items_[tag];
+    // 如果allowed不一样，更新这个值
+    if (ctrl.allowed != allowed_num){
+        ctrl.allowed = allowed_num;
+    }
+
+    if (ctrl.count < ctrl.allowed) {
+        int tmp = ctrl.allowed - ctrl.count;
+        ctrl.count ++;
+        return tmp;
+    } else {
+        return 0;
+    }
 }
 
 

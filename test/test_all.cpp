@@ -335,6 +335,103 @@ void test_global_logging() {
     SLOG_ERROR("Error message: {} and {}", 100, "error");
 }
 
+// Test log limiting functionality
+void test_log_limiting() {
+    std::cout << "\n=== Test 15: Log Limiting ===" << std::endl;
+    
+    auto logger = slog::make_stdout_logger("test_limited", slog::LogLevel::Debug);
+    
+    // Test 1: Basic limiting - allow 3 messages
+    std::cout << "\nTest 1: Basic limiting (allow 3 messages):" << std::endl;
+    std::cout << "Sending 5 messages with tag 'test1', only first 3 should appear:" << std::endl;
+    for (int i = 1; i <= 5; ++i) {
+        logger->info_limited("test1", 3, "Limited message {} of 5", i);
+    }
+    
+    // Test 2: Last message should have suppression notice
+    std::cout << "\nTest 2: Last allowed message should show suppression notice:" << std::endl;
+    std::cout << "Sending 2 messages with tag 'test2', second should show suppression notice:" << std::endl;
+    logger->info_limited("test2", 2, "First message");
+    logger->info_limited("test2", 2, "Second message (should show suppression notice)");
+    logger->info_limited("test2", 2, "Third message (should not appear)");
+    
+    // Test 3: Different tags are independent
+    std::cout << "\nTest 3: Different tags have independent counters:" << std::endl;
+    std::cout << "Sending messages with different tags:" << std::endl;
+    logger->info_limited("tag_a", 2, "Tag A message 1");
+    logger->info_limited("tag_b", 2, "Tag B message 1");
+    logger->info_limited("tag_a", 2, "Tag A message 2 (should show suppression notice)");
+    logger->info_limited("tag_b", 2, "Tag B message 2 (should show suppression notice)");
+    logger->info_limited("tag_a", 2, "Tag A message 3 (should not appear)");
+    logger->info_limited("tag_b", 2, "Tag B message 3 (should not appear)");
+    
+    // Test 4: Different log levels
+    std::cout << "\nTest 4: Limiting works with different log levels:" << std::endl;
+    logger->debug_limited("debug_tag", 2, "Debug limited message 1");
+    logger->debug_limited("debug_tag", 2, "Debug limited message 2");
+    logger->debug_limited("debug_tag", 2, "Debug limited message 3 (should not appear)");
+    
+    logger->warning_limited("warn_tag", 2, "Warning limited message 1");
+    logger->warning_limited("warn_tag", 2, "Warning limited message 2");
+    logger->warning_limited("warn_tag", 2, "Warning limited message 3 (should not appear)");
+    
+    logger->error_limited("error_tag", 2, "Error limited message 1");
+    logger->error_limited("error_tag", 2, "Error limited message 2");
+    logger->error_limited("error_tag", 2, "Error limited message 3 (should not appear)");
+    
+    // Test 5: Reset functionality
+    std::cout << "\nTest 5: Reset limited counter:" << std::endl;
+    std::cout << "Sending 2 messages, then reset, then 2 more:" << std::endl;
+    logger->info_limited("reset_tag", 2, "Before reset message 1");
+    logger->info_limited("reset_tag", 2, "Before reset message 2");
+    logger->info_limited("reset_tag", 2, "Before reset message 3 (should not appear)");
+    
+    logger->reset_limited("reset_tag");
+    std::cout << "Counter reset, sending more messages:" << std::endl;
+    logger->info_limited("reset_tag", 2, "After reset message 1");
+    logger->info_limited("reset_tag", 2, "After reset message 2");
+    logger->info_limited("reset_tag", 2, "After reset message 3 (should not appear)");
+    
+    // Test 6: Global limited functions
+    std::cout << "\nTest 6: Global limited logging functions:" << std::endl;
+    std::cout << "Sending 2 messages using global functions:" << std::endl;
+    slog::info_limited("global_tag", 2, "Global limited message 1");
+    slog::info_limited("global_tag", 2, "Global limited message 2");
+    slog::info_limited("global_tag", 2, "Global limited message 3 (should not appear)");
+    
+    // Test 7: Formatting with limited logging
+    std::cout << "\nTest 7: Formatted limited logging:" << std::endl;
+    std::cout << "Sending formatted messages:" << std::endl;
+    int value = 42;
+    std::string name = "test";
+    logger->info_limited("format_tag", 2, "Formatted message: {} = {}", name, value);
+    logger->info_limited("format_tag", 2, "Another formatted: value is {}", value);
+    logger->info_limited("format_tag", 2, "This should not appear: {}", value);
+    
+    // Test 8: Single message limit
+    std::cout << "\nTest 8: Single message limit:" << std::endl;
+    std::cout << "Sending 3 messages with limit of 1:" << std::endl;
+    logger->info_limited("single_tag", 1, "Only this message should appear (with suppression notice)");
+    logger->info_limited("single_tag", 1, "This should not appear");
+    logger->info_limited("single_tag", 1, "This should not appear");
+    
+    // Test 9: Zero limit (should suppress all)
+    std::cout << "\nTest 9: Zero limit (should suppress all messages):" << std::endl;
+    std::cout << "Sending messages with limit of 0 (none should appear):" << std::endl;
+    logger->info_limited("zero_tag", 0, "This should not appear");
+    logger->info_limited("zero_tag", 0, "This should not appear");
+    
+    // Test 10: Changing allowed_num dynamically
+    std::cout << "\nTest 10: Changing allowed_num dynamically:" << std::endl;
+    std::cout << "Sending messages with changing limit:" << std::endl;
+    logger->info_limited("dynamic_tag", 2, "Message 1 (limit=2)");
+    logger->info_limited("dynamic_tag", 2, "Message 2 (limit=2)");
+    logger->info_limited("dynamic_tag", 2, "Message 3 (limit=2, should not appear)");
+    logger->info_limited("dynamic_tag", 5, "Message 4 (limit changed to 5, should appear)");
+    logger->info_limited("dynamic_tag", 5, "Message 5 (limit=5, should appear)");
+    logger->info_limited("dynamic_tag", 5, "Message 6 (limit=5, should appear)");
+}
+
 
 
 int main() {
@@ -357,6 +454,7 @@ int main() {
         test_default_logger();
         test_none_sink();
         test_global_logging();
+        test_log_limiting();
         
         std::cout << "\n========================================" << std::endl;
         std::cout << "  All Tests Completed Successfully!" << std::endl;
