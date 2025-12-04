@@ -29,13 +29,6 @@
 
 #include <slog/fmt/format.h>
 
-// 前向声明格式化实现函数（内部使用）
-namespace slog {
-namespace detail {
-    std::string format_string_impl(std::string const &fmt, std::vector<std::string> const &args);
-    std::string process_escape_sequences(std::string const &fmt);
-} // namespace detail
-} // namespace slog
 
 namespace slog 
 {

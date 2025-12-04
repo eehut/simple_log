@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(simple_log VERSION 0.2.0 LANGUAGES CXX)
+project(simple_log VERSION 0.2 LANGUAGES CXX)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -46,3 +46,34 @@ message(STATUS "Stdout color output: ${SLOG_STDOUT_COLOR}")
 enable_testing()
 add_subdirectory(test)
 
+# Install headers
+install(DIRECTORY include/slog
+    DESTINATION include
+    FILES_MATCHING
+    PATTERN "*.h"
+    PATTERN "*.hpp"
+)
+
+# Install CMake config files
+include(CMakePackageConfigHelpers)
+
+# Create slogConfigVersion.cmake
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/slogConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+# Create slogConfig.cmake
+configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/slogConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/slogConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/slog
+)
+
+# Install CMake config files
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/slogConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/slogConfigVersion.cmake"
+    DESTINATION lib/cmake/slog
+)

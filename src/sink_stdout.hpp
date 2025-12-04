@@ -1,6 +1,17 @@
 #ifndef __SLOG_SINK_STDOUT_H__
 #define __SLOG_SINK_STDOUT_H__
 
+/**
+ * @file sink_stdout.hpp
+ * @author LiuChuansen (179712066@qq.com)
+ * @brief 
+ * @version 0.1
+ * @date 2025-12-04
+ * 
+ * @copyright Copyright (c) 2025
+ * 
+ */
+
 #include "slog/slog.hpp"
 #include <iostream>
 #include <sstream>
