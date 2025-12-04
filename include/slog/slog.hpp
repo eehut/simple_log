@@ -402,6 +402,39 @@ std::shared_ptr<Logger> make_none_logger(std::string const &name);
 */
 std::shared_ptr<Logger> make_stdout_logger(std::string const &name, LogLevel level = LogLevel::Info);
 
+/**
+* @brief 设置全局日志等级规则
+* 
+* 设置一个日志等级规则，该规则会在以下情况生效：
+* 1. 调用此函数时，会立即应用到所有已存在的匹配的 logger
+* 2. 创建新的 logger 时，如果名称匹配，会自动应用此规则
+* 
+* 支持两种匹配模式：
+* - 精确匹配：直接使用 logger 名称，如 "my_logger"
+* - 正则表达式匹配：使用正则表达式模式，如 ".*_debug" 可以匹配所有以 "_debug" 结尾的 logger
+*   正则表达式使用 ECMAScript 语法（C++ std::regex）
+* 
+* 优先级：精确匹配 > 正则匹配（按添加顺序，第一个匹配的正则规则生效）
+* 
+* 注意：如果 logger 已经通过 set_level() 手动设置过等级，则不会被全局规则覆盖
+* 
+* @param pattern logger名称或正则表达式模式（支持多次调用设置不同的规则）
+* @param level 日志等级
+* 
+* @example
+* ```cpp
+* // 精确匹配
+* slog::set_logger_level("my_logger", slog::LogLevel::Debug);
+* 
+* // 正则表达式匹配：匹配所有以 "_debug" 结尾的 logger
+* slog::set_logger_level(".*_debug", slog::LogLevel::Trace);
+* 
+* // 正则表达式匹配：匹配所有以 "camera_" 开头的 logger
+* slog::set_logger_level("^camera_.*", slog::LogLevel::Info);
+* ```
+*/
+void set_logger_level(const std::string& pattern, LogLevel level);
+
 
 template<typename... Args>
 inline void log(LogLevel level, fmt::format_string<Args...> fmt, Args &&...args)

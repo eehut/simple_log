@@ -10,6 +10,7 @@
 #include <sstream>
 #include <cstdio>
 #include <cstdint>
+#include <regex>
 
 #include "slog/slog.hpp"
 #include "sink_stdout.hpp"
@@ -171,6 +172,7 @@ int Logger::limited_allowed_left(std::string const &tag, int allowed_num)
     }
 }
 
+
 std::shared_ptr<Logger> Logger::clone(std::string const & logger_name) const
 {
     auto sink = sink_->clone(logger_name);
@@ -307,7 +309,126 @@ public:
     std::shared_ptr<Logger> make_logger(const std::string& name, std::shared_ptr<LoggerSink> sink = nullptr) {
         auto logger = std::make_shared<Logger>(name, sink);
         register_logger(logger);
+        
+        // 应用全局日志等级规则（如果存在匹配的规则）
+        auto level = detail::LoggerRegistry::instance().get_logger_level_rule(name);
+        if (level != LogLevel::Unknown) {
+            logger->set_level(level);
+        }
+        
         return logger;
+    }
+
+    /**
+     * @brief 设置全局日志等级规则
+     * 
+     * 支持两种模式：
+     * 1. 精确匹配：直接使用 logger 名称，如 "my_logger"
+     * 2. 正则表达式匹配：使用正则表达式模式，如 ".*_debug" 可以匹配所有以 "_debug" 结尾的 logger
+     * 
+     * 优先级：精确匹配优先于正则匹配
+     * 
+     * @param pattern logger名称或正则表达式模式
+     * @param level 日志等级
+     */
+    void set_logger_level_rule(const std::string& pattern, LogLevel level) {
+
+        // 不允许 为空
+        if (pattern.empty()) {
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(mutex_);
+        
+        // 尝试编译为正则表达式，如果成功则作为正则规则，否则作为精确匹配
+        try {
+            std::regex regex_pattern(pattern, std::regex::ECMAScript | std::regex::optimize);
+            // 如果编译成功，检查是否是简单的精确匹配（不包含特殊字符）
+            // 如果包含正则特殊字符，则作为正则规则
+            bool is_regex = false;
+            for (char c : pattern) {
+                if (c == '.' || c == '*' || c == '+' || c == '?' || c == '^' || 
+                    c == '$' || c == '[' || c == ']' || c == '(' || c == ')' ||
+                    c == '{' || c == '}' || c == '|' || c == '\\') {
+                    is_regex = true;
+                    break;
+                }
+            }
+            
+            if (is_regex) {
+                // 作为正则表达式规则存储
+                regex_level_rules_.emplace_back(std::make_pair(std::move(regex_pattern), level));
+            } else {
+                // 作为精确匹配规则存储
+                level_rules_[pattern] = level;
+            }
+        } catch (const std::regex_error&) {
+            // 如果正则表达式编译失败，作为精确匹配规则
+            level_rules_[pattern] = level;
+        }
+        
+        // 立即应用到所有已存在的匹配的 logger
+        apply_rules_to_existing_loggers(pattern, level, !level_rules_.count(pattern));
+    }
+
+    /**
+     * @brief 获取全局日志等级规则
+     * 
+     * 优先级：精确匹配 > 正则匹配（按添加顺序，第一个匹配的规则生效）
+     * 
+     * @param name logger名称
+     * @return LogLevel 如果存在规则返回对应等级，否则返回 LogLevel::Unknown
+     */
+    LogLevel get_logger_level_rule(const std::string& name) const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        
+        // 首先检查精确匹配
+        auto it = level_rules_.find(name);
+        if (it != level_rules_.end()) {
+            return it->second;
+        }
+        
+        // 然后检查正则表达式匹配（按添加顺序，第一个匹配的规则生效）
+        for (const auto& regex_rule : regex_level_rules_) {
+            if (std::regex_match(name, regex_rule.first)) {
+                return regex_rule.second;
+            }
+        }
+        
+        return LogLevel::Unknown;
+    }
+
+private:
+    /**
+     * @brief 应用规则到已存在的 logger
+     * 
+     * @param pattern 规则模式（精确匹配或正则表达式）
+     * @param level 日志等级（未使用，保留用于未来扩展）
+     * @param is_regex 是否是正则表达式
+     */
+    void apply_rules_to_existing_loggers(const std::string& pattern, LogLevel  level, bool is_regex) {
+        if (is_regex) {
+            // 正则表达式匹配：遍历所有 logger
+            try {
+                std::regex regex_pattern(pattern, std::regex::ECMAScript | std::regex::optimize);
+                for (auto& pair : registry_) {
+                    if (std::regex_match(pair.first, regex_pattern)) {
+                        auto logger = pair.second;
+                        logger->set_level(level);
+                    }
+                }
+            } catch (const std::regex_error&) {
+                // 正则表达式编译失败，忽略
+            }
+        } else {
+            // 精确匹配
+            for (auto& pair : registry_) {
+                if (pair.first == pattern) {
+                    auto logger = pair.second;
+                    logger->set_level(level);
+                }
+            }
+        }
     }
 
 private:
@@ -316,9 +437,11 @@ private:
     LoggerRegistry(const LoggerRegistry&) = delete;
     LoggerRegistry& operator=(const LoggerRegistry&) = delete;
 
-    std::mutex mutex_;
+    mutable std::mutex mutex_;  ///< 使用 mutable 以便在 const 方法中锁定
     std::unordered_map<std::string, std::shared_ptr<Logger>> registry_;
     std::shared_ptr<Logger> default_logger_;
+    std::map<std::string, LogLevel> level_rules_;  ///< 全局日志等级规则（精确匹配）
+    std::vector<std::pair<std::regex, LogLevel>> regex_level_rules_;  ///< 全局日志等级规则（正则表达式匹配）
 };
 
 } // namespace detail
@@ -360,6 +483,11 @@ std::shared_ptr<Logger> make_none_logger(std::string const &name)
 std::shared_ptr<Logger> make_stdout_logger(std::string const &name, LogLevel level)
 {
     return make_logger(name, std::make_shared<sink::Stdout>(level));
+}
+
+void set_logger_level(const std::string& name, LogLevel level)
+{
+    detail::LoggerRegistry::instance().set_logger_level_rule(name, level);
 }
 
 

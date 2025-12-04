@@ -432,6 +432,135 @@ void test_log_limiting() {
     logger->info_limited("dynamic_tag", 5, "Message 6 (limit=5, should appear)");
 }
 
+// Test global logger level rules
+void test_global_logger_level_rules() {
+    std::cout << "\n=== Test 16: Global Logger Level Rules ===" << std::endl;
+    
+    // Test 1: Set rule before creating logger (exact match)
+    std::cout << "\nTest 1: Set rule before creating logger (exact match):" << std::endl;
+    slog::set_logger_level("pre_created_logger", slog::LogLevel::Debug);
+    auto logger1 = slog::make_stdout_logger("pre_created_logger", slog::LogLevel::Error);
+    std::cout << "Logger created with Error level, but rule sets Debug:" << std::endl;
+    std::cout << "  Actual level: " << slog::log_level_name(logger1->get_level()) << std::endl;
+    logger1->trace("Trace message (should not appear, level is Debug)");
+    logger1->debug("Debug message (should appear)");
+    logger1->info("Info message (should appear)");
+    
+    // Test 2: Set rule after creating logger (exact match)
+    std::cout << "\nTest 2: Set rule after creating logger (exact match):" << std::endl;
+    auto logger2 = slog::make_stdout_logger("post_created_logger", slog::LogLevel::Error);
+    std::cout << "Logger created with Error level:" << std::endl;
+    logger2->info("Info message before rule (should not appear)");
+    slog::set_logger_level("post_created_logger", slog::LogLevel::Info);
+    std::cout << "Rule set to Info, level should change:" << std::endl;
+    std::cout << "  Actual level: " << slog::log_level_name(logger2->get_level()) << std::endl;
+    logger2->info("Info message after rule (should appear)");
+    
+    // Test 3: Regex pattern matching - match all loggers ending with "_debug"
+    std::cout << "\nTest 3: Regex pattern matching (.*_debug):" << std::endl;
+    slog::set_logger_level(".*_debug", slog::LogLevel::Trace);
+    auto logger3a = slog::make_stdout_logger("test_debug", slog::LogLevel::Error);
+    auto logger3b = slog::make_stdout_logger("another_debug", slog::LogLevel::Warning);
+    auto logger3c = slog::make_stdout_logger("normal_logger", slog::LogLevel::Error);
+    
+    std::cout << "test_debug level: " << slog::log_level_name(logger3a->get_level()) << std::endl;
+    std::cout << "another_debug level: " << slog::log_level_name(logger3b->get_level()) << std::endl;
+    std::cout << "normal_logger level: " << slog::log_level_name(logger3c->get_level()) << std::endl;
+    
+    logger3a->trace("Trace message from test_debug (should appear)");
+    logger3b->trace("Trace message from another_debug (should appear)");
+    logger3c->trace("Trace message from normal_logger (should not appear)");
+    
+    // Test 4: Regex pattern matching - match all loggers starting with "camera_"
+    std::cout << "\nTest 4: Regex pattern matching (^camera_.*):" << std::endl;
+    slog::set_logger_level("^camera_.*", slog::LogLevel::Info);
+    auto camera_main = slog::make_stdout_logger("camera_main", slog::LogLevel::Error);
+    auto camera_sub = slog::make_stdout_logger("camera_sub", slog::LogLevel::Error);
+    auto other_logger = slog::make_stdout_logger("other_logger", slog::LogLevel::Error);
+    
+    std::cout << "camera_main level: " << slog::log_level_name(camera_main->get_level()) << std::endl;
+    std::cout << "camera_sub level: " << slog::log_level_name(camera_sub->get_level()) << std::endl;
+    std::cout << "other_logger level: " << slog::log_level_name(other_logger->get_level()) << std::endl;
+    
+    camera_main->debug("Debug message (should not appear)");
+    camera_main->info("Info message (should appear)");
+    camera_sub->info("Info message from sub (should appear)");
+    other_logger->info("Info message from other (should not appear)");
+    
+    // Test 5: Priority - exact match overrides regex match
+    std::cout << "\nTest 5: Priority - exact match overrides regex match:" << std::endl;
+    slog::set_logger_level(".*_special", slog::LogLevel::Warning);  // Regex rule
+    slog::set_logger_level("test_special", slog::LogLevel::Debug);   // Exact match rule
+    auto logger5 = slog::make_stdout_logger("test_special", slog::LogLevel::Error);
+    
+    std::cout << "test_special level: " << slog::log_level_name(logger5->get_level()) << std::endl;
+    std::cout << "Should be Debug (exact match), not Warning (regex match):" << std::endl;
+    logger5->debug("Debug message (should appear - exact match wins)");
+    logger5->warning("Warning message (should appear)");
+    
+    // Test 6: Multiple regex rules - first match wins
+    std::cout << "\nTest 6: Multiple regex rules - first match wins:" << std::endl;
+    slog::set_logger_level(".*_network", slog::LogLevel::Error);      // First regex rule
+    slog::set_logger_level(".*_network.*", slog::LogLevel::Debug);   // Second regex rule (broader)
+    auto network_logger = slog::make_stdout_logger("test_network", slog::LogLevel::Info);
+    
+    std::cout << "test_network level: " << slog::log_level_name(network_logger->get_level()) << std::endl;
+    std::cout << "Should be Error (first matching rule):" << std::endl;
+    network_logger->debug("Debug message (should not appear)");
+    network_logger->info("Info message (should not appear)");
+    network_logger->error("Error message (should appear)");
+    
+    // Test 7: Regex pattern with special characters
+    std::cout << "\nTest 7: Regex pattern with special characters:" << std::endl;
+    slog::set_logger_level(".*module[0-9]+", slog::LogLevel::Trace);
+    auto module1 = slog::make_stdout_logger("test_module1", slog::LogLevel::Error);
+    auto module2 = slog::make_stdout_logger("test_module2", slog::LogLevel::Error);
+    auto module10 = slog::make_stdout_logger("test_module10", slog::LogLevel::Error);
+    auto module_abc = slog::make_stdout_logger("test_module_abc", slog::LogLevel::Error);
+    
+    std::cout << "test_module1 level: " << slog::log_level_name(module1->get_level()) << std::endl;
+    std::cout << "test_module2 level: " << slog::log_level_name(module2->get_level()) << std::endl;
+    std::cout << "test_module10 level: " << slog::log_level_name(module10->get_level()) << std::endl;
+    std::cout << "test_module_abc level: " << slog::log_level_name(module_abc->get_level()) << std::endl;
+    
+    module1->trace("Trace from module1 (should appear)");
+    module2->trace("Trace from module2 (should appear)");
+    module10->trace("Trace from module10 (should appear)");
+    module_abc->trace("Trace from module_abc (should not appear - no digit)");
+    
+    // Test 8: Update rule for existing logger
+    std::cout << "\nTest 8: Update rule for existing logger:" << std::endl;
+    auto logger8 = slog::make_stdout_logger("update_test", slog::LogLevel::Error);
+    std::cout << "Initial level: " << slog::log_level_name(logger8->get_level()) << std::endl;
+    logger8->info("Info before update (should not appear)");
+    
+    slog::set_logger_level("update_test", slog::LogLevel::Info);
+    std::cout << "After setting rule to Info: " << slog::log_level_name(logger8->get_level()) << std::endl;
+    logger8->info("Info after update (should appear)");
+    
+    slog::set_logger_level("update_test", slog::LogLevel::Debug);
+    std::cout << "After updating rule to Debug: " << slog::log_level_name(logger8->get_level()) << std::endl;
+    logger8->debug("Debug after update (should appear)");
+    
+    // Test 9: No matching rule - logger keeps original level
+    std::cout << "\nTest 9: No matching rule - logger keeps original level:" << std::endl;
+    auto logger9 = slog::make_stdout_logger("no_rule_logger", slog::LogLevel::Warning);
+    std::cout << "Logger level: " << slog::log_level_name(logger9->get_level()) << std::endl;
+    std::cout << "Should remain Warning (no matching rule):" << std::endl;
+    logger9->info("Info message (should not appear)");
+    logger9->warning("Warning message (should appear)");
+    
+    // Test 10: Empty pattern (should be ignored)
+    std::cout << "\nTest 10: Empty pattern (should be ignored):" << std::endl;
+    auto logger10 = slog::make_stdout_logger("empty_test", slog::LogLevel::Info);
+    std::cout << "Before empty rule: " << slog::log_level_name(logger10->get_level()) << std::endl;
+    slog::set_logger_level("", slog::LogLevel::Debug);  // Empty pattern
+    std::cout << "After empty rule: " << slog::log_level_name(logger10->get_level()) << std::endl;
+    std::cout << "Should remain Info (empty pattern ignored):" << std::endl;
+    logger10->debug("Debug message (should not appear)");
+    logger10->info("Info message (should appear)");
+}
+
 
 
 int main() {
@@ -455,6 +584,7 @@ int main() {
         test_none_sink();
         test_global_logging();
         test_log_limiting();
+        test_global_logger_level_rules();
         
         std::cout << "\n========================================" << std::endl;
         std::cout << "  All Tests Completed Successfully!" << std::endl;
