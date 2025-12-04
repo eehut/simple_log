@@ -27,6 +27,12 @@ public:
     explicit None(LogLevel level = LogLevel::Off) : level_(level) { }
 
     std::shared_ptr<LoggerSink> clone(std::string const & logger_name) const override {
+
+        // 如果名称一样，则返回空
+        if (logger_name == name_){
+            return nullptr;
+        }
+
         auto sink = std::make_shared<None>(level_);
         sink->setup(logger_name);
         return sink;

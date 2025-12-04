@@ -171,6 +171,20 @@ int Logger::limited_allowed_left(std::string const &tag, int allowed_num)
     }
 }
 
+std::shared_ptr<Logger> Logger::clone(std::string const & logger_name) const
+{
+    auto sink = sink_->clone(logger_name);
+    if (!sink) {
+        return nullptr;
+    }
+
+    auto logger = std::make_shared<Logger>(logger_name, sink);
+    logger->valid_ = valid_;
+    register_logger(logger);
+
+    return logger;
+}
+
 
 namespace detail
 {

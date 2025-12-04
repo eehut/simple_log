@@ -134,6 +134,7 @@ class LoggerSink
 public:    
     virtual ~LoggerSink() = default;
 
+    // 克隆一个SINK，必须保证名称不一样，如果是一样，则返回空指针
     virtual std::shared_ptr<LoggerSink> clone(std::string const & logger_name) const = 0;
 
     virtual bool setup(std::string const & logger_name) = 0;
@@ -209,6 +210,10 @@ public:
     /// @param msg 日志消息
     void log_limited(std::string const &tag, int allowed_num, LogLevel level, std::string const &msg);
 
+    /// @brief 克隆一个Logger对象，从当前sink fork出新的logger
+    /// @param logger_name 新logger的名称
+    /// @return std::shared_ptr<Logger> 新的logger对象，如果克隆失败返回nullptr
+    std::shared_ptr<Logger> clone(std::string const & logger_name) const;
 
     // 以下是基础函数
     template<typename... Args>

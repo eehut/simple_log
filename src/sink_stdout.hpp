@@ -18,12 +18,15 @@
 #include <iomanip>
 #include <chrono>
 #include <ctime>
+#include <mutex>
 
 namespace slog {
 namespace sink {
 
 /**
  * @brief Stdout Sink实现（内部使用，header-only）
+ * 
+ * 线程安全：所有 Stdout sink 共享一个全局 mutex，确保输出到 std::cout 的日志不会交错
  */
 class Stdout: public LoggerSink
 {
@@ -31,6 +34,12 @@ public:
     explicit Stdout(LogLevel level) : level_(level) { }
 
     std::shared_ptr<LoggerSink> clone(std::string const & logger_name) const override {
+
+        // 如果名称一样，则返回空
+        if (logger_name == name_){
+            return nullptr;
+        }
+
         auto sink = std::make_shared<Stdout>(level_);
         sink->setup(logger_name);
         return sink;
@@ -47,6 +56,9 @@ public:
         {
             return;
         }
+        
+        // 使用全局锁保护所有 stdout 输出，确保多线程环境下日志不会交错
+        std::lock_guard<std::mutex> lock(get_stdout_mutex());
         
         auto now = std::chrono::system_clock::now();
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -115,6 +127,13 @@ public:
 private:
     std::string name_;
     LogLevel level_;
+
+    /// @brief 获取全局 stdout mutex（所有 Stdout sink 共享）
+    /// @return std::mutex& 
+    static std::mutex& get_stdout_mutex() {
+        static std::mutex mtx;
+        return mtx;
+    }
 };
 
 } // namespace sink
