@@ -1,0 +1,407 @@
+#ifndef __SLOG_H__
+#define __SLOG_H__
+
+/**
+ * @file slog.hpp
+ * @author Liu Chuansen (179712066@qq.com)
+ * @brief 日志库头文件，支持stdout输出
+ * @version 0.2
+ * @date 2023-05-25
+ * 
+ * @copyright Copyright (c) 2023
+ * 
+ */
+
+#include <memory>
+#include <string>
+#include <vector>
+#include <iostream>
+#include <sstream>
+#include <iomanip>
+#include <chrono>
+#include <ctime>
+#include <cctype>
+#include <cstdint>
+#include <cstdio>
+#include <mutex>
+#include <unordered_map>
+
+
+#include <slog/fmt/format.h>
+
+// 前向声明格式化实现函数（内部使用）
+namespace slog {
+namespace detail {
+    std::string format_string_impl(std::string const &fmt, std::vector<std::string> const &args);
+    std::string process_escape_sequences(std::string const &fmt);
+} // namespace detail
+} // namespace slog
+
+namespace slog 
+{
+
+/// 日志等级
+enum class LogLevel : int 
+{
+    Trace = 0,
+    Debug,
+    Info,
+    Warning,
+    Error,
+    Off,
+    Unknown = Off + 2,
+};
+
+/**
+ * @brief 获取日志等级的名称
+ * 
+ * @param level 
+ * @return const char* 
+ */
+constexpr const char *log_level_name(LogLevel level) noexcept
+{
+    switch(level)
+    {
+        case LogLevel::Trace:
+        return "TRACE";
+        case LogLevel::Debug:
+        return "DEBUG";
+        case LogLevel::Info:
+        return "INFO";
+        case LogLevel::Warning:
+        return "WARN";
+        case LogLevel::Error:
+        return "ERROR";
+        default:
+        return "";
+    }
+}
+
+/**
+ * @brief 获取日志等级的简称
+ * 
+ * @param level 
+ * @return char 
+ */
+constexpr char log_level_short_name(LogLevel level) noexcept
+{
+    constexpr const char brief[] = "TDIWEON";
+    constexpr size_t brief_size = sizeof(brief) - 1; // 减去 '\0'
+    int index = static_cast<int>(level);
+    return (index >= 0 && static_cast<size_t>(index) < brief_size) ? brief[index] : '-';
+}
+
+/**
+ * @brief 将字串转换日志名称，支持短名称如T D, d等
+ * 
+ * @param level 
+ * @param default_level 默认值
+ * @return LogLevel 
+ */
+inline LogLevel log_level_from_name(std::string const &level, LogLevel default_level = LogLevel::Unknown)
+{
+    if (level.empty())
+    {
+        return default_level;
+    }
+
+    // 先转成全小写（原地转换，避免额外拷贝）
+    std::string in = level;
+    for (auto & c : in){
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+
+    constexpr const char* level_names[] = {"trace", "debug", "info", "warning", "error"};
+    constexpr LogLevel levels[] = {LogLevel::Trace, LogLevel::Debug, LogLevel::Info, LogLevel::Warning, LogLevel::Error};
+    constexpr size_t level_count = sizeof(level_names) / sizeof(level_names[0]);
+
+    // 比较每个字串
+    for (size_t i = 0; i < level_count; ++i)
+    {
+        if ((in.size() == 1) && (level_names[i][0] == in[0]))
+        {
+            return levels[i];
+        }
+
+        if (level_names[i] == in)
+        {
+            return levels[i];
+        }
+    }
+
+    return default_level;
+}
+
+/**
+ * @brief 一个日志SINK接口
+ * 
+ */
+class LoggerSink
+{
+public:    
+    virtual ~LoggerSink() = default;
+
+    virtual std::shared_ptr<LoggerSink> clone(std::string const & logger_name) const = 0;
+
+    virtual bool setup(std::string const & logger_name) = 0;
+    virtual void log(LogLevel level, std::string const & msg) = 0;
+    virtual void set_level(LogLevel level) = 0;
+    virtual LogLevel get_level() const = 0;
+    virtual const char * name() const = 0;
+};
+
+/**
+ * @brief Logger对象声明
+ * 
+ */
+class Logger
+{
+
+public:
+    /// 共享指针
+    using SharedPtr = std::shared_ptr<Logger>; 
+
+    Logger(std::string const &name, std::shared_ptr<LoggerSink> sink = nullptr);
+
+    // 禁止复制构造
+    Logger(Logger const &) = delete;
+    Logger & operator=(Logger const &) = delete;
+
+    ~Logger() = default;
+
+    /// @brief 返回名称
+    /// @return 
+    std::string const &name() const;
+
+    /// @brief 返回日志等级
+    /// @return 
+    LogLevel get_level() const;
+
+    /// @brief 设置日志等级
+    /// @param level 
+    void set_level(LogLevel level);
+
+    /// @brief 是否允许打印指定等级
+    /// @param level 
+    /// @return 
+    bool is_allowed(LogLevel level) const noexcept;
+
+    /// @brief 显示指定日志
+    /// @param level 日志等级
+    /// @param msg 日志消息
+    void log(LogLevel level, std::string const &msg);
+
+    /// @brief 显示指定日志（const char*版本，避免字符串拷贝）
+    /// @param level 日志等级
+    /// @param msg 日志消息
+    void log(LogLevel level, const char* msg);
+
+    /// @brief 显示十六进制数据
+    /// @param level 日志等级
+    /// @param data 数据地址
+    /// @param size 数据大小
+    /// @param msg 日志消息
+    void dump(LogLevel level, void const *data, size_t size, std::string const &msg);
+
+    /// @brief 显示vector中的数据
+    /// @param level 
+    /// @param data 
+    /// @param msg 
+    void dump(LogLevel level, std::vector<uint8_t> const & data, std::string const &msg);
+
+
+    template<typename... Args>
+    void trace(fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log(LogLevel::Trace, fmt::format(fmt, std::forward<Args>(args)...));
+    }
+
+    template<typename... Args>
+    void debug(fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log(LogLevel::Debug, fmt::format(fmt, std::forward<Args>(args)...));        
+    }
+
+    template<typename... Args>
+    void info(fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log(LogLevel::Info, fmt::format(fmt, std::forward<Args>(args)...));        
+    }    
+
+    template<typename... Args>
+    void warning(fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log(LogLevel::Warning, fmt::format(fmt, std::forward<Args>(args)...));        
+    }    
+
+    template<typename... Args>
+    void error(fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log(LogLevel::Error, fmt::format(fmt, std::forward<Args>(args)...));        
+    }
+
+private:
+    std::string name_;
+    std::shared_ptr<LoggerSink> sink_;
+    bool valid_;
+};
+
+
+/**
+* @brief 获取默认logger
+* 
+* @return std::shared_ptr<Logger> 
+*/
+std::shared_ptr<Logger> default_logger();
+
+/**
+* @brief 注册一个logger到全局注册表
+* 
+* @param logger logger指针
+* @return true 成功
+* @return false 失败
+*/
+bool register_logger(std::shared_ptr<Logger> logger);
+
+/**
+* @brief 设置默认logger
+* 
+* @param name logger名称
+* @return true 成功
+* @return false 失败（logger不存在）
+*/
+bool set_default_logger(const std::string& name);
+
+/**
+* @brief 获取指定名称的logger
+* 
+* @param name logger名称
+* @return std::shared_ptr<Logger> logger指针，如果不存在返回nullptr
+*/
+std::shared_ptr<Logger> get_logger(const std::string& name);
+
+/**
+* @brief 检查logger是否存在
+* 
+* @param name logger名称
+* @return true 存在
+* @return false 不存在
+*/
+bool has_logger(const std::string& name);
+
+/**
+* @brief 移除一个logger
+* 
+* @param name logger名称
+*/
+void drop_logger(const std::string& name);
+
+/**
+* @brief 创建并注册一个logger
+* 
+* @param name logger名称
+* @param sink sink指针，如果为空则使用默认stdout sink
+* @return std::shared_ptr<Logger> logger指针
+*/
+std::shared_ptr<Logger> make_logger(const std::string& name, std::shared_ptr<LoggerSink> sink = nullptr);
+
+/**
+* @brief 创建一个空SINK，不输出任何信息
+* 
+* @param name logger名称
+* @return std::shared_ptr<Logger> 
+*/
+std::shared_ptr<Logger> make_none_logger(std::string const &name);
+
+/**
+* @brief 创建一个标准输出的日志
+* 
+* @param name logger名称
+* @param level 日志等级
+* @return std::shared_ptr<Logger> 
+*/
+std::shared_ptr<Logger> make_stdout_logger(std::string const &name, LogLevel level = LogLevel::Info);
+
+
+template<typename... Args>
+inline void log(LogLevel level, fmt::format_string<Args...> fmt, Args &&...args)
+{
+    default_logger()->log(level, fmt::format(fmt, std::forward<Args>(args)...));
+}
+
+template<typename... Args>
+inline void trace(fmt::format_string<Args...> fmt, Args &&...args)
+{
+    default_logger()->log(LogLevel::Trace, fmt::format(fmt, std::forward<Args>(args)...));
+}
+
+template<typename... Args>
+inline void debug(fmt::format_string<Args...> fmt, Args &&...args)
+{
+    default_logger()->log(LogLevel::Debug, fmt::format(fmt, std::forward<Args>(args)...));
+}
+
+template<typename... Args>
+inline void info(fmt::format_string<Args...> fmt, Args &&...args)
+{
+    default_logger()->log(LogLevel::Info, fmt::format(fmt, std::forward<Args>(args)...));
+}
+
+template<typename... Args>
+inline void warning(fmt::format_string<Args...> fmt, Args &&...args)
+{
+    default_logger()->log(LogLevel::Warning, fmt::format(fmt, std::forward<Args>(args)...));
+}
+
+template<typename... Args>
+inline void error(fmt::format_string<Args...> fmt, Args &&...args)
+{
+    default_logger()->log(LogLevel::Error, fmt::format(fmt, std::forward<Args>(args)...));
+}
+
+} // namespace slog
+
+/**
+ * @brief 日志宏，支持编译时格式字符串检查
+ * 
+ * 使用这些宏可以在编译时检查格式字符串和参数是否匹配。
+ * 这些宏内部使用 FMT_STRING 来启用编译时检查。
+ * 
+ * @example
+ * ```cpp
+ * SLOG_INFO("User {} logged in", username);
+ * SLOG_ERROR("Failed to connect: {}", error_code);
+ * ```
+ */
+#define SLOG_TRACE(fmt, ...) \
+    slog::trace(FMT_STRING(fmt), ##__VA_ARGS__)
+
+#define SLOG_DEBUG(fmt, ...) \
+    slog::debug(FMT_STRING(fmt), ##__VA_ARGS__)
+
+#define SLOG_INFO(fmt, ...) \
+    slog::info(FMT_STRING(fmt), ##__VA_ARGS__)
+
+#define SLOG_WARNING(fmt, ...) \
+    slog::warning(FMT_STRING(fmt), ##__VA_ARGS__)
+
+#define SLOG_ERROR(fmt, ...) \
+    slog::error(FMT_STRING(fmt), ##__VA_ARGS__)
+
+
+#define LOGGER_TRACE(logger, fmt, ...) \
+    logger->trace(FMT_STRING(fmt), ##__VA_ARGS__)
+
+#define LOGGER_DEBUG(logger, fmt, ...) \
+    logger->debug(FMT_STRING(fmt), ##__VA_ARGS__)
+
+#define LOGGER_INFO(logger, fmt, ...) \
+    logger->info(FMT_STRING(fmt), ##__VA_ARGS__)
+
+#define LOGGER_WARNING(logger, fmt, ...) \
+    logger->warning(FMT_STRING(fmt), ##__VA_ARGS__)
+
+#define LOGGER_ERROR(logger, fmt, ...) \
+    logger->error(FMT_STRING(fmt), ##__VA_ARGS__)
+
+#endif  // __SLOG_H__
