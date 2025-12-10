@@ -18,6 +18,19 @@
 
 namespace slog {
 
+//#define SLOG_DEBUG_ENABLE 1
+
+// Debug macro for internal debugging (can be enabled by defining SLOG_DEBUG_ENABLE)
+#ifdef SLOG_DEBUG_ENABLE
+#define __debug(fmt, ...) \
+    do { \
+        std::printf("[SLOG_DEBUG] " fmt "\n", ##__VA_ARGS__); \
+        std::fflush(stdout); \
+    } while(0)
+#else
+#define __debug(fmt, ...) ((void)0)
+#endif 
+
 // Logger implementation
 Logger::Logger(std::string const &name, std::shared_ptr<LoggerSink> sink)
     : name_(name), valid_(false)
@@ -180,8 +193,27 @@ std::shared_ptr<Logger> Logger::clone(std::string const & logger_name) const
         return nullptr;
     }
 
+    __debug("clone logger: %s", logger_name.c_str());
+
     auto logger = std::make_shared<Logger>(logger_name, sink);
     logger->valid_ = valid_;
+    register_logger(logger);
+
+    return logger;
+}
+
+std::shared_ptr<Logger> Logger::clone(std::string const & logger_name, LogLevel level) const
+{
+    auto sink = sink_->clone(logger_name);
+    if (!sink) {
+        return nullptr;
+    }
+
+    __debug("clone logger: %s", logger_name.c_str());
+
+    auto logger = std::make_shared<Logger>(logger_name, sink);
+    logger->valid_ = valid_;
+    logger->set_level(level);  // 设置指定的日志等级
     register_logger(logger);
 
     return logger;
@@ -239,6 +271,15 @@ public:
         if (!logger) {
             return false;
         }
+
+        __debug("register logger: %s", logger->name().c_str());
+
+        // 应用全局日志等级规则（如果存在匹配的规则）
+        auto level = detail::LoggerRegistry::instance().get_logger_level_rule(logger->name());
+        if (level != LogLevel::Unknown) {
+            logger->set_level(level);
+        }
+
         std::lock_guard<std::mutex> lock(mutex_);
         registry_[logger->name()] = logger;
         return true;
@@ -307,28 +348,70 @@ public:
      * @return std::shared_ptr<Logger> logger指针
      */
     std::shared_ptr<Logger> make_logger(const std::string& name, std::shared_ptr<LoggerSink> sink = nullptr) {
+        __debug("make logger: %s", name.c_str());
         auto logger = std::make_shared<Logger>(name, sink);
-        register_logger(logger);
+        register_logger(logger);        
+        return logger;
+    }
+
+    /**
+     * @brief 将 shell 通配符模式转换为正则表达式
+     * 
+     * 将 shell 风格的 * 和 ? 转换为正则表达式：
+     * - * 转换为 .*
+     * - ? 转换为 .
+     * - 转义其他特殊字符
+     * 
+     * @param pattern shell 通配符模式
+     * @return std::string 转换后的正则表达式
+     */
+    static std::string wildcard_to_regex(const std::string& pattern) {
+        std::string regex_pattern;
+        regex_pattern.reserve(pattern.size() * 2);  // 预留空间
         
-        // 应用全局日志等级规则（如果存在匹配的规则）
-        auto level = detail::LoggerRegistry::instance().get_logger_level_rule(name);
-        if (level != LogLevel::Unknown) {
-            logger->set_level(level);
+        for (char c : pattern) {
+            switch (c) {
+                case '*':
+                    regex_pattern += ".*";
+                    break;
+                case '?':
+                    regex_pattern += '.';
+                    break;
+                case '.':
+                case '+':
+                case '^':
+                case '$':
+                case '[':
+                case ']':
+                case '(':
+                case ')':
+                case '{':
+                case '}':
+                case '|':
+                    // 转义正则表达式特殊字符
+                    regex_pattern += '\\';
+                    regex_pattern += c;
+                    break;
+                default:
+                    regex_pattern += c;
+                    break;
+            }
         }
         
-        return logger;
+        return regex_pattern;
     }
 
     /**
      * @brief 设置全局日志等级规则
      * 
-     * 支持两种模式：
+     * 支持三种模式：
      * 1. 精确匹配：直接使用 logger 名称，如 "my_logger"
-     * 2. 正则表达式匹配：使用正则表达式模式，如 ".*_debug" 可以匹配所有以 "_debug" 结尾的 logger
+     * 2. Shell 通配符模式：使用 * 和 ?，如 "v4l2-*" 可以匹配所有以 "v4l2-" 开头的 logger
+     * 3. 正则表达式匹配：使用正则表达式模式，如 ".*_debug" 可以匹配所有以 "_debug" 结尾的 logger
      * 
-     * 优先级：精确匹配优先于正则匹配
+     * 优先级：精确匹配 > Shell 通配符 > 正则匹配
      * 
-     * @param pattern logger名称或正则表达式模式
+     * @param pattern logger名称、shell 通配符模式或正则表达式模式
      * @param level 日志等级
      */
     void set_logger_level_rule(const std::string& pattern, LogLevel level) {
@@ -340,35 +423,52 @@ public:
 
         std::lock_guard<std::mutex> lock(mutex_);
         
-        // 尝试编译为正则表达式，如果成功则作为正则规则，否则作为精确匹配
-        try {
-            std::regex regex_pattern(pattern, std::regex::ECMAScript | std::regex::optimize);
-            // 如果编译成功，检查是否是简单的精确匹配（不包含特殊字符）
-            // 如果包含正则特殊字符，则作为正则规则
-            bool is_regex = false;
-            for (char c : pattern) {
-                if (c == '.' || c == '*' || c == '+' || c == '?' || c == '^' || 
-                    c == '$' || c == '[' || c == ']' || c == '(' || c == ')' ||
-                    c == '{' || c == '}' || c == '|' || c == '\\') {
-                    is_regex = true;
-                    break;
-                }
+        // 检查是否包含 shell 通配符（* 或 ?），但不包含正则表达式特殊字符
+        bool has_wildcard = false;
+        bool has_regex_special = false;
+        
+        for (char c : pattern) {
+            if (c == '*' || c == '?') {
+                has_wildcard = true;
             }
+            if (c == '.' || c == '+' || c == '^' || c == '$' || 
+                c == '[' || c == ']' || c == '(' || c == ')' ||
+                c == '{' || c == '}' || c == '|' || c == '\\') {
+                has_regex_special = true;
+                break;
+            }
+        }
+        
+        // 如果包含通配符但不包含正则特殊字符，转换为正则表达式
+        std::string regex_pattern_str = pattern;
+        if (has_wildcard && !has_regex_special) {
+            regex_pattern_str = wildcard_to_regex(pattern);
+            __debug("convert wildcard pattern '%s' to regex '%s'", pattern.c_str(), regex_pattern_str.c_str());
+        }
+        
+        // 尝试编译为正则表达式
+        try {
+            std::regex regex_pattern(regex_pattern_str, std::regex::ECMAScript | std::regex::optimize);
             
-            if (is_regex) {
-                // 作为正则表达式规则存储
-                regex_level_rules_.emplace_back(std::make_pair(std::move(regex_pattern), level));
+            // 如果包含通配符或正则特殊字符，作为正则规则
+            if (has_wildcard || has_regex_special) {
+                // 作为正则表达式规则存储（保存原始字符串、编译后的正则表达式和日志等级）
+                regex_level_rules_.emplace_back(std::make_tuple(pattern, std::move(regex_pattern), level));
+                __debug("add regex level rule: %s", pattern.c_str());
             } else {
                 // 作为精确匹配规则存储
                 level_rules_[pattern] = level;
+                __debug("add exact level rule: %s", pattern.c_str());
             }
         } catch (const std::regex_error&) {
             // 如果正则表达式编译失败，作为精确匹配规则
             level_rules_[pattern] = level;
+            __debug("add exact level rule (regex compile failed): %s", pattern.c_str());
         }
         
         // 立即应用到所有已存在的匹配的 logger
-        apply_rules_to_existing_loggers(pattern, level, !level_rules_.count(pattern));
+        bool is_regex = has_wildcard || has_regex_special;
+        apply_rules_to_existing_loggers(pattern, level, is_regex);
     }
 
     /**
@@ -385,13 +485,21 @@ public:
         // 首先检查精确匹配
         auto it = level_rules_.find(name);
         if (it != level_rules_.end()) {
+            __debug("get exact level rule for logger: %s %s", name.c_str(), log_level_name(it->second));
             return it->second;
         }
         
         // 然后检查正则表达式匹配（按添加顺序，第一个匹配的规则生效）
         for (const auto& regex_rule : regex_level_rules_) {
-            if (std::regex_match(name, regex_rule.first)) {
-                return regex_rule.second;
+            #ifdef SLOG_DEBUG_ENABLE
+            const std::string& pattern_str = std::get<0>(regex_rule);
+            #endif
+            const std::regex& regex_pattern = std::get<1>(regex_rule);
+            LogLevel rule_level = std::get<2>(regex_rule);
+            __debug("try match regex rule: %s to logger: %s", pattern_str.c_str(), name.c_str());
+            if (std::regex_match(name, regex_pattern)) {
+                __debug("get regex level rule for logger: %s %s", name.c_str(), log_level_name(rule_level));
+                return rule_level;
             }
         }
         
@@ -410,11 +518,34 @@ private:
         if (is_regex) {
             // 正则表达式匹配：遍历所有 logger
             try {
-                std::regex regex_pattern(pattern, std::regex::ECMAScript | std::regex::optimize);
+                // 检查是否包含 shell 通配符，需要转换
+                bool has_wildcard = false;
+                bool has_regex_special = false;
+                
+                for (char c : pattern) {
+                    if (c == '*' || c == '?') {
+                        has_wildcard = true;
+                    }
+                    if (c == '.' || c == '+' || c == '^' || c == '$' || 
+                        c == '[' || c == ']' || c == '(' || c == ')' ||
+                        c == '{' || c == '}' || c == '|' || c == '\\') {
+                        has_regex_special = true;
+                        break;
+                    }
+                }
+                
+                std::string regex_pattern_str = pattern;
+                if (has_wildcard && !has_regex_special) {
+                    regex_pattern_str = wildcard_to_regex(pattern);
+                }
+                
+                std::regex regex_pattern(regex_pattern_str, std::regex::ECMAScript | std::regex::optimize);
                 for (auto& pair : registry_) {
+                    __debug("try match regex rule: %s to logger: %s", pattern.c_str(), pair.first.c_str());
                     if (std::regex_match(pair.first, regex_pattern)) {
                         auto logger = pair.second;
                         logger->set_level(level);
+                        __debug("apply regex level rule to logger: %s", pair.first.c_str());
                     }
                 }
             } catch (const std::regex_error&) {
@@ -426,6 +557,7 @@ private:
                 if (pair.first == pattern) {
                     auto logger = pair.second;
                     logger->set_level(level);
+                    __debug("apply exact level rule to logger: %s", pair.first.c_str());
                 }
             }
         }
@@ -441,7 +573,7 @@ private:
     std::unordered_map<std::string, std::shared_ptr<Logger>> registry_;
     std::shared_ptr<Logger> default_logger_;
     std::map<std::string, LogLevel> level_rules_;  ///< 全局日志等级规则（精确匹配）
-    std::vector<std::pair<std::regex, LogLevel>> regex_level_rules_;  ///< 全局日志等级规则（正则表达式匹配）
+    std::vector<std::tuple<std::string, std::regex, LogLevel>> regex_level_rules_;  ///< 全局日志等级规则（正则表达式匹配）：存储原始字符串、编译后的正则表达式和日志等级
 };
 
 } // namespace detail

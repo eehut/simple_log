@@ -215,6 +215,12 @@ public:
     /// @return std::shared_ptr<Logger> 新的logger对象，如果克隆失败返回nullptr
     std::shared_ptr<Logger> clone(std::string const & logger_name) const;
 
+    /// @brief 克隆一个Logger对象，从当前sink fork出新的logger，并设置指定的日志等级
+    /// @param logger_name 新logger的名称
+    /// @param level 新logger的日志等级
+    /// @return std::shared_ptr<Logger> 新的logger对象，如果克隆失败返回nullptr
+    std::shared_ptr<Logger> clone(std::string const & logger_name, LogLevel level) const;
+
     // 以下是基础函数
     template<typename... Args>
     void log(LogLevel level, fmt::format_string<Args...> fmt, Args &&... args)
