@@ -9,10 +9,10 @@ check_required_components(slog)
 # Set variables for backward compatibility
 set(SLOG_VERSION @PROJECT_VERSION@)
 set(SLOG_INCLUDE_DIRS "${PACKAGE_PREFIX_DIR}/include")
-set(SLOG_LIBRARIES slog::slog_static)
-
-# Provide find_package compatibility
-if(NOT TARGET slog::slog)
-    add_library(slog::slog ALIAS slog::slog_static)
+# Default to shared library (slog), fallback to static (slog_static)
+if(TARGET slog::slog)
+    set(SLOG_LIBRARIES slog::slog)
+elseif(TARGET slog::slog_static)
+    set(SLOG_LIBRARIES slog::slog_static)
 endif()
 

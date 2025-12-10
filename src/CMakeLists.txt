@@ -25,29 +25,29 @@ target_compile_definitions(slog_static PUBLIC
     SLOG_STDOUT_COLOR=$<IF:$<BOOL:${SLOG_STDOUT_COLOR}>,1,0>
 )
 
-# Shared library
-add_library(slog_shared SHARED ${SLOG_SOURCES})
-set_target_properties(slog_shared PROPERTIES
+# Shared library (default, use simple name 'slog')
+add_library(slog SHARED ${SLOG_SOURCES})
+set_target_properties(slog PROPERTIES
     OUTPUT_NAME slog
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
-target_include_directories(slog_shared 
+target_include_directories(slog 
     PUBLIC 
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include/slog>
         $<INSTALL_INTERFACE:include>
 )
-target_compile_definitions(slog_shared PUBLIC 
+target_compile_definitions(slog PUBLIC 
     SLOG_STDOUT_COLOR=$<IF:$<BOOL:${SLOG_STDOUT_COLOR}>,1,0>
 )
 
 # Alias targets for convenience
 add_library(slog::slog_static ALIAS slog_static)
-add_library(slog::slog_shared ALIAS slog_shared)
+add_library(slog::slog ALIAS slog)
 
 # Install libraries
-install(TARGETS slog_static slog_shared
+install(TARGETS slog_static slog
     EXPORT slogTargets
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
