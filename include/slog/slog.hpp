@@ -441,6 +441,24 @@ std::shared_ptr<Logger> make_stdout_logger(std::string const &name, LogLevel lev
 */
 void set_logger_level(const std::string& pattern, LogLevel level);
 
+/**
+ * @brief 应用日志规则
+ * 
+ * @param rule_text 日志规则文本，格式为："pattern:level"，多个规则用逗号或分号分隔, level支持trace,debug,info,warning,error, 大小写可以混用
+ * @example
+ * ```cpp
+ * slog::apply_logger_rules("my_logger:debug;camera_.*:info;driver:trace");
+ * ```
+ */
+int apply_logger_rules(const std::string& rule_text);
+
+/**
+ * @brief 获取所有日志规则
+ * 
+ * @return std::map<std::string, LogLevel> 日志规则
+ */
+std::map<std::string, LogLevel> get_logger_rules();
+
 
 template<typename... Args>
 inline void log(LogLevel level, fmt::format_string<Args...> fmt, Args &&...args)

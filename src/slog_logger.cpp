@@ -506,6 +506,28 @@ public:
         return LogLevel::Unknown;
     }
 
+    /**
+     * @brief 获取所有日志规则（包括精确匹配和正则匹配）
+     * 
+     * @return std::map<std::string, LogLevel> 所有规则的映射，key 为 pattern 字符串，value 为日志级别
+     */
+    std::map<std::string, LogLevel> get_logger_rules() const 
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        
+        // 创建结果映射，先添加精确匹配规则
+        std::map<std::string, LogLevel> all_rules = level_rules_;
+        
+        // 添加正则匹配规则（使用原始 pattern 字符串）
+        for (const auto& regex_rule : regex_level_rules_) {
+            const std::string& pattern = std::get<0>(regex_rule);
+            LogLevel level = std::get<2>(regex_rule);
+            all_rules[pattern] = level;
+        }
+        
+        return all_rules;
+    }
+
 private:
     /**
      * @brief 应用规则到已存在的 logger
@@ -622,6 +644,91 @@ void set_logger_level(const std::string& name, LogLevel level)
     detail::LoggerRegistry::instance().set_logger_level_rule(name, level);
 }
 
+/**
+ * @brief 应用日志规则
+ * 
+ * @param rule_text 日志规则文本，格式为："pattern:level"，多个规则用逗号或分号分隔
+ * @example
+ * ```cpp
+ * slog::apply_logger_rules("my_logger:debug;camera_.*:i;driver:trace");
+ * ```
+ * @return int 成功应用的规则数量
+ */
+int apply_logger_rules(const std::string& rule_text)
+{
+    if (rule_text.empty()) {
+        return 0;
+    }
+    
+    int applied_count = 0;
+    std::string current_rule;
+    
+    // 遍历规则文本，分割规则（支持逗号和分号作为分隔符）
+    for (size_t i = 0; i <= rule_text.length(); ++i) {
+        char c = (i < rule_text.length()) ? rule_text[i] : '\0';
+        
+        // 遇到分隔符或字符串结尾，处理当前规则
+        if (c == ',' || c == ';' || c == '\0') {
+            if (!current_rule.empty()) {
+                // 去除前后空白字符
+                size_t start = current_rule.find_first_not_of(" \t\r\n");
+                size_t end = current_rule.find_last_not_of(" \t\r\n");
+                
+                if (start != std::string::npos && end != std::string::npos) {
+                    std::string trimmed_rule = current_rule.substr(start, end - start + 1);
+                    
+                    // 查找冒号分隔符
+                    size_t colon_pos = trimmed_rule.find(':');
+                    if (colon_pos != std::string::npos && colon_pos > 0 && colon_pos < trimmed_rule.length() - 1) {
+                        // 提取 pattern 和 level
+                        std::string pattern = trimmed_rule.substr(0, colon_pos);
+                        std::string level_str = trimmed_rule.substr(colon_pos + 1);
+                        
+                        // 去除 pattern 和 level 的空白字符
+                        size_t pattern_start = pattern.find_first_not_of(" \t\r\n");
+                        size_t pattern_end = pattern.find_last_not_of(" \t\r\n");
+                        size_t level_start = level_str.find_first_not_of(" \t\r\n");
+                        size_t level_end = level_str.find_last_not_of(" \t\r\n");
+                        
+                        if (pattern_start != std::string::npos && pattern_end != std::string::npos &&
+                            level_start != std::string::npos && level_end != std::string::npos) {
+                            
+                            pattern = pattern.substr(pattern_start, pattern_end - pattern_start + 1);
+                            level_str = level_str.substr(level_start, level_end - level_start + 1);
+                            
+                            // 解析日志级别
+                            LogLevel level = log_level_from_name(level_str, LogLevel::Unknown);
+                            
+                            if (level != LogLevel::Unknown) {
+                                // 应用规则
+                                set_logger_level(pattern, level);
+                                applied_count++;
+                                __debug("applied rule: pattern='%s', level='%s'", pattern.c_str(), level_str.c_str());
+                            } else {
+                                __debug("invalid log level in rule: '%s'", trimmed_rule.c_str());
+                            }
+                        }
+                    } else {
+                        __debug("invalid rule format (missing colon): '%s'", trimmed_rule.c_str());
+                    }
+                }
+            }
+            
+            // 清空当前规则，准备处理下一个
+            current_rule.clear();
+        } else {
+            // 累积当前规则的字符
+            current_rule += c;
+        }
+    }
+    
+    return applied_count;
+}
+
+std::map<std::string, LogLevel> get_logger_rules()
+{
+    return detail::LoggerRegistry::instance().get_logger_rules();
+}
 
 } // namespace slog
 
