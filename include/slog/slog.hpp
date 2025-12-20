@@ -156,6 +156,11 @@ public:
     using SharedPtr = std::shared_ptr<Logger>; 
 
     Logger(std::string const &name, std::shared_ptr<LoggerSink> sink = nullptr);
+    
+    /// @brief 多sink构造函数
+    /// @param name logger名称
+    /// @param sinks sink列表
+    Logger(std::string const &name, std::vector<std::shared_ptr<LoggerSink>> sinks);
 
     // 禁止复制构造
     Logger(Logger const &) = delete;
@@ -171,11 +176,11 @@ public:
     /// @return 
     LogLevel get_level() const;
 
-    /// @brief 设置日志等级
+    /// @brief 设置日志等级，将修改所有sink的等级
     /// @param level 
     void set_level(LogLevel level);
 
-    /// @brief 是否允许打印指定等级
+    /// @brief 是否允许打印指定等级, 受限使用，单sink有效，多sink,取决于等级值最小的。
     /// @param level 
     /// @return 
     bool is_allowed(LogLevel level) const noexcept;
@@ -314,8 +319,10 @@ public:
 
 private:
     std::string name_;
-    std::shared_ptr<LoggerSink> sink_;
+    std::vector<std::shared_ptr<LoggerSink>> sinks_;
     bool valid_;
+    LogLevel min_level_; // 过滤等级，如果为Off，则不进行过滤
+    LogLevel max_level_; // 最大等级，如果为Off，则不进行过滤
 
     /// 用来管理日志抑制
     struct LimitedControl
@@ -329,6 +336,10 @@ private:
     /// @param tag 抑制的标签
     /// @param allowed_num 允许打印的日志数量
     int limited_allowed_left(std::string const &tag, int allowed_num);
+
+    /// @brief 计算最小等级
+    /// @return 最小等级
+    void update_filter_level();
 
 };
 
@@ -392,6 +403,15 @@ void drop_logger(const std::string& name);
 std::shared_ptr<Logger> make_logger(const std::string& name, std::shared_ptr<LoggerSink> sink = nullptr);
 
 /**
+ * @brief 创建一个通用的多sink logger
+ * 
+ * @param name logger名称
+ * @param sinks sink列表
+ * @return std::shared_ptr<Logger> 
+ */
+ std::shared_ptr<Logger> make_logger(std::string const &name, std::vector<std::shared_ptr<LoggerSink>> sinks);
+
+/**
 * @brief 创建一个空SINK，不输出任何信息
 * 
 * @param name logger名称
@@ -407,6 +427,37 @@ std::shared_ptr<Logger> make_none_logger(std::string const &name);
 * @return std::shared_ptr<Logger> 
 */
 std::shared_ptr<Logger> make_stdout_logger(std::string const &name, LogLevel level = LogLevel::Info);
+
+
+/**
+ * @brief 创建一个文件日志logger
+ * 
+ * @param name logger名称
+ * @param filepath 日志文件路径
+ * @param level 日志等级，默认Info
+ * @param to_stdout 是否输出到stdout，默认false
+ * @param flush_on_write 是否每次写入后立即刷新，默认true
+ * @return std::shared_ptr<Logger> 
+ */
+std::shared_ptr<Logger> make_file_logger(std::string const &name, std::string const &filepath, LogLevel level = LogLevel::Info, 
+    bool to_stdout = false, bool flush_on_write = true);
+
+
+/**
+ * @brief 创建一个自动轮转的文件日志logger
+ * 
+ * @param name logger名称
+ * @param filepath 日志文件路径
+ * @param level 日志等级，默认Info
+ * @param max_file_size 最大文件大小（字节），默认10MB
+ * @param max_files 保留的旧日志文件数量，默认5个
+ * @param to_stdout 是否输出到stdout，默认true
+ * @param flush_on_write 是否每次写入后立即刷新，默认true
+ * @return std::shared_ptr<Logger> 
+ */
+std::shared_ptr<Logger> make_rotating_file_logger(std::string const &name, std::string const &filepath, LogLevel level = LogLevel::Info, 
+    size_t max_file_size = 10 * 1024 * 1024, size_t max_files = 5, bool to_stdout = false, bool flush_on_write = true);
+
 
 /**
 * @brief 设置全局日志等级规则

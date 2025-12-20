@@ -13,8 +13,9 @@
 #include <regex>
 
 #include "slog/slog.hpp"
-#include "sink_stdout.hpp"
-#include "sink_none.hpp"
+#include "slog/sink_stdout.hpp"
+#include "slog/sink_none.hpp"
+#include "slog/sink_file.hpp"
 
 namespace slog {
 
@@ -41,49 +42,115 @@ Logger::Logger(std::string const &name, std::shared_ptr<LoggerSink> sink)
         sink = std::make_shared<sink::Stdout>(LogLevel::Info);        
     }
 
-    sink_ = std::move(sink);
+    sinks_.push_back(std::move(sink));
 
-    // 建立sink
-    valid_ = sink_->setup(this->name_);
-
-    if (!valid_)
+    // 建立所有sink
+    for (auto& s : sinks_)
     {
-        std::cerr << "setup logger("<< sink_->name() << ") failed" << std::endl;
+        if (!s->setup(this->name_))
+        {
+            std::cerr << "setup sink(" << s->name() << ") failed" << std::endl;
+            return;
+        }
     }
+    
+    valid_ = true;
+    update_filter_level();
 }
 
-std::string const &Logger::name() const {
+// 多sink构造函数实现
+Logger::Logger(std::string const &name, std::vector<std::shared_ptr<LoggerSink>> sinks)
+    : name_(name), sinks_(std::move(sinks)), valid_(false)
+{
+    if (sinks_.empty())
+    {
+        // 如果为空，使用一个默认的stdout SINK
+        sinks_.push_back(std::make_shared<sink::Stdout>(LogLevel::Info));
+    }
+
+    // 建立所有sink
+    for (auto& s : sinks_)
+    {
+        if (!s->setup(this->name_))
+        {
+            std::cerr << "setup sink(" << s->name() << ") failed" << std::endl;
+            return;
+        }
+    }
+    
+    valid_ = true;
+    update_filter_level();
+}
+
+std::string const &Logger::name() const 
+{
     return name_;
 }
 
-LogLevel Logger::get_level() const {
-    return sink_->get_level();
-}
-
-void Logger::set_level(LogLevel level) {
-    sink_->set_level(level);
-}
-
-bool Logger::is_allowed(LogLevel level) const noexcept {
-    return static_cast<int>(level) >= static_cast<int>(sink_->get_level());
-}
-
-void Logger::log(LogLevel level, std::string const &msg) {
-    if (valid_ && is_allowed(level))
+LogLevel Logger::get_level() const 
+{
+    if (sinks_.empty())
     {
-        sink_->log(level, msg);
+        return LogLevel::Off;
+    }
+    
+    return min_level_;
+}
+
+void Logger::set_level(LogLevel level) 
+{
+    // 设置所有sink的level
+    for (auto& sink : sinks_)
+    {
+        if (sink)
+        {
+            sink->set_level(level);
+        }
+    }
+
+    update_filter_level();
+}
+
+bool Logger::is_allowed(LogLevel level) const noexcept 
+{
+    // 只要有一个sink允许就返回true
+    // 多sink情况下，取决于等级值最小的。
+    // 如有两个LEVEL， DEBUG， INFO， 应该允许DEBUG的信息通过
+    return static_cast<int>(level) >= static_cast<int>(min_level_);
+}
+
+void Logger::log(LogLevel level, std::string const &msg) 
+{
+    if (!valid_ || static_cast<int>(level) < static_cast<int>(min_level_))
+    {
+        return;
+    }
+    
+    // 遍历所有sink
+    for (auto& sink : sinks_)
+    {
+        sink->log(level, msg);
     }
 }
 
-void Logger::log(LogLevel level, const char* msg) {
-    if (valid_ && is_allowed(level))
+void Logger::log(LogLevel level, const char* msg) 
+{
+    if (!valid_ || static_cast<int>(level) < static_cast<int>(min_level_))
     {
-        sink_->log(level, std::string(msg));
+        return;
+    }
+    
+    // 遍历所有sink
+    std::string msg_str(msg);
+    for (auto& sink : sinks_)
+    {
+        sink->log(level, msg);
     }
 }
 
-void Logger::log_data(LogLevel level, void const *data, size_t size, std::string const &msg) {
-    if (!valid_ || !is_allowed(level))
+void Logger::log_data(LogLevel level, void const *data, size_t size, std::string const &msg) 
+{
+    if (!valid_ || static_cast<int>(level) < static_cast<int>(min_level_))
     {
         return;
     }
@@ -114,11 +181,17 @@ void Logger::log_data(LogLevel level, void const *data, size_t size, std::string
         hex += buf;
     }
 
-    sink_->log(level, msg + hex);    
+    std::string full_msg = msg + hex;
+    // 遍历所有sink
+    for (auto& sink : sinks_)
+    {
+        sink->log(level, msg);
+    }
 }
 
-void Logger::log_data(LogLevel level, std::vector<uint8_t> const & data, std::string const &msg) {
-    if (!valid_ || !is_allowed(level))
+void Logger::log_data(LogLevel level, std::vector<uint8_t> const & data, std::string const &msg) 
+{
+    if (!valid_ || static_cast<int>(level) < static_cast<int>(min_level_))
     {
         return;
     }
@@ -148,15 +221,25 @@ void Logger::log_data(LogLevel level, std::vector<uint8_t> const & data, std::st
         hex += buf;
     }
 
-    sink_->log(level, msg + hex);
+    std::string full_msg = msg + hex;
+    // 遍历所有sink
+    for (auto& sink : sinks_)
+    {
+        sink->log(level, msg);
+    }
 }
 
 void Logger::log_limited(std::string const &tag, int allowed_num, LogLevel level, std::string const &msg)
 {
     int left = limited_allowed_left(tag, allowed_num);
-    if (valid_ && is_allowed(level) && (left > 0))
+    if (valid_ && (static_cast<int>(level) >= static_cast<int>(min_level_)) && (left > 0))
     {
-        sink_->log(level, (left == 1) ? (msg + " (more messages will be suppressed)") : msg);
+        std::string final_msg = (left == 1) ? (msg + " (more messages will be suppressed)") : msg;
+        // 遍历所有sink
+        for (auto& sink : sinks_)
+        {
+            sink->log(level, final_msg);
+        }
     }
 }
 
@@ -185,18 +268,63 @@ int Logger::limited_allowed_left(std::string const &tag, int allowed_num)
     }
 }
 
+/**
+ * @brief 更新过滤等级
+ * 计算所有sink的等级，更新min_level_和max_level_
+ * min_level_为所有sink的等级中最小的, 比如一个SINK 是INFO，另一个是DEBUG，则min_level_为DEBUG
+ * max_level_为所有sink的等级中最大的, 比如一个SINK 是INFO，另一个是DEBUG，则max_level_为INFO
+ */
+void Logger::update_filter_level()
+{
+    min_level_ = LogLevel::Off;
+    max_level_ = LogLevel::Trace;
+    for (auto& sink : sinks_)
+    {
+        if (sink)
+        {
+            LogLevel sink_level = sink->get_level();
+            if (static_cast<int>(sink_level) < static_cast<int>(min_level_))
+            {
+                min_level_ = sink_level;
+            }
+            if (static_cast<int>(sink_level) > static_cast<int>(max_level_))
+            {
+                max_level_ = sink_level;
+            }
+        }
+    }
+}
+
 
 std::shared_ptr<Logger> Logger::clone(std::string const & logger_name) const
 {
-    auto sink = sink_->clone(logger_name);
-    if (!sink) {
+    if (logger_name == name_)
+    {
+        return nullptr;
+    }
+    
+    // 克隆所有sink
+    std::vector<std::shared_ptr<LoggerSink>> cloned_sinks;
+    for (auto& sink : sinks_)
+    {
+        if (sink)
+        {
+            auto cloned = sink->clone(logger_name);
+            if (cloned)
+            {
+                cloned_sinks.push_back(cloned);
+            }
+        }
+    }
+    
+    if (cloned_sinks.empty())
+    {
         return nullptr;
     }
 
     __debug("clone logger: %s", logger_name.c_str());
 
-    auto logger = std::make_shared<Logger>(logger_name, sink);
-    logger->valid_ = valid_;
+    auto logger = std::make_shared<Logger>(logger_name, cloned_sinks);
     register_logger(logger);
 
     return logger;
@@ -204,16 +332,34 @@ std::shared_ptr<Logger> Logger::clone(std::string const & logger_name) const
 
 std::shared_ptr<Logger> Logger::clone(std::string const & logger_name, LogLevel level) const
 {
-    auto sink = sink_->clone(logger_name);
-    if (!sink) {
+    if (logger_name == name_)
+    {
+        return nullptr;
+    }
+    
+    // 克隆所有sink
+    std::vector<std::shared_ptr<LoggerSink>> cloned_sinks;
+    for (auto& sink : sinks_)
+    {
+        if (sink)
+        {
+            auto cloned = sink->clone(logger_name);
+            if (cloned)
+            {
+                cloned->set_level(level);
+                cloned_sinks.push_back(cloned);
+            }
+        }
+    }
+    
+    if (cloned_sinks.empty())
+    {
         return nullptr;
     }
 
     __debug("clone logger: %s", logger_name.c_str());
 
-    auto logger = std::make_shared<Logger>(logger_name, sink);
-    logger->valid_ = valid_;
-    logger->set_level(level);  // 设置指定的日志等级
+    auto logger = std::make_shared<Logger>(logger_name, cloned_sinks);
     register_logger(logger);
 
     return logger;
@@ -267,7 +413,8 @@ public:
      * @return true 成功
      * @return false 失败（logger为空）
      */
-    bool register_logger(std::shared_ptr<Logger> logger) {
+    bool register_logger(std::shared_ptr<Logger> logger) 
+    {
         if (!logger) {
             return false;
         }
@@ -292,7 +439,8 @@ public:
      * @return true 成功
      * @return false 失败（logger不存在）
      */
-    bool set_default(const std::string& name) {
+    bool set_default(const std::string& name) 
+    {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = registry_.find(name);
         if (it != registry_.end()) {
@@ -308,7 +456,8 @@ public:
      * @param name logger名称
      * @return std::shared_ptr<Logger> logger指针，如果不存在返回nullptr
      */
-    std::shared_ptr<Logger> get_logger(const std::string& name) {
+    std::shared_ptr<Logger> get_logger(const std::string& name) 
+    {
         std::lock_guard<std::mutex> lock(mutex_);
         auto it = registry_.find(name);
         return (it != registry_.end()) ? it->second : nullptr;
@@ -321,7 +470,8 @@ public:
      * @return true 存在
      * @return false 不存在
      */
-    bool has_logger(const std::string& name) {
+    bool has_logger(const std::string& name) 
+    {
         std::lock_guard<std::mutex> lock(mutex_);
         return registry_.find(name) != registry_.end();
     }
@@ -331,27 +481,14 @@ public:
      * 
      * @param name logger名称
      */
-    void drop_logger(const std::string& name) {
+    void drop_logger(const std::string& name) 
+    {
         std::lock_guard<std::mutex> lock(mutex_);
         registry_.erase(name);
         // 如果被移除的是默认logger，重置默认logger
         if (default_logger_ && default_logger_->name() == name) {
             default_logger_.reset();
         }
-    }
-
-    /**
-     * @brief 创建并注册一个logger
-     * 
-     * @param name logger名称
-     * @param sink sink指针，如果为空则使用默认stdout sink
-     * @return std::shared_ptr<Logger> logger指针
-     */
-    std::shared_ptr<Logger> make_logger(const std::string& name, std::shared_ptr<LoggerSink> sink = nullptr) {
-        __debug("make logger: %s", name.c_str());
-        auto logger = std::make_shared<Logger>(name, sink);
-        register_logger(logger);        
-        return logger;
     }
 
     /**
@@ -365,7 +502,8 @@ public:
      * @param pattern shell 通配符模式
      * @return std::string 转换后的正则表达式
      */
-    static std::string wildcard_to_regex(const std::string& pattern) {
+    static std::string wildcard_to_regex(const std::string& pattern) 
+    {
         std::string regex_pattern;
         regex_pattern.reserve(pattern.size() * 2);  // 预留空间
         
@@ -414,7 +552,8 @@ public:
      * @param pattern logger名称、shell 通配符模式或正则表达式模式
      * @param level 日志等级
      */
-    void set_logger_level_rule(const std::string& pattern, LogLevel level) {
+    void set_logger_level_rule(const std::string& pattern, LogLevel level) 
+    {
 
         // 不允许 为空
         if (pattern.empty()) {
@@ -479,7 +618,8 @@ public:
      * @param name logger名称
      * @return LogLevel 如果存在规则返回对应等级，否则返回 LogLevel::Unknown
      */
-    LogLevel get_logger_level_rule(const std::string& name) const {
+    LogLevel get_logger_level_rule(const std::string& name) const 
+    {
         std::lock_guard<std::mutex> lock(mutex_);
         
         // 首先检查精确匹配
@@ -536,7 +676,8 @@ private:
      * @param level 日志等级（未使用，保留用于未来扩展）
      * @param is_regex 是否是正则表达式
      */
-    void apply_rules_to_existing_loggers(const std::string& pattern, LogLevel  level, bool is_regex) {
+    void apply_rules_to_existing_loggers(const std::string& pattern, LogLevel  level, bool is_regex) 
+    {
         if (is_regex) {
             // 正则表达式匹配：遍历所有 logger
             try {
@@ -605,28 +746,49 @@ std::shared_ptr<Logger> default_logger() {
     return detail::LoggerRegistry::instance().get_default();
 }
 
-bool register_logger(std::shared_ptr<Logger> logger) {
+bool register_logger(std::shared_ptr<Logger> logger) 
+{
     return detail::LoggerRegistry::instance().register_logger(logger);
 }
 
-bool set_default_logger(const std::string& name) {
+bool set_default_logger(const std::string& name) 
+{
     return detail::LoggerRegistry::instance().set_default(name);
 }
 
-std::shared_ptr<Logger> get_logger(const std::string& name) {
+std::shared_ptr<Logger> get_logger(const std::string& name) 
+{
     return detail::LoggerRegistry::instance().get_logger(name);
 }
 
-bool has_logger(const std::string& name) {
+bool has_logger(const std::string& name) 
+{
     return detail::LoggerRegistry::instance().has_logger(name);
 }
 
-void drop_logger(const std::string& name) {
+void drop_logger(const std::string& name) 
+{
     detail::LoggerRegistry::instance().drop_logger(name);
 }
 
-std::shared_ptr<Logger> make_logger(const std::string& name, std::shared_ptr<LoggerSink> sink) {
-    return detail::LoggerRegistry::instance().make_logger(name, sink);
+std::shared_ptr<Logger> make_logger(const std::string& name, std::shared_ptr<LoggerSink> sink) 
+{
+    auto logger = std::make_shared<Logger>(name, sink);
+    if (logger && register_logger(logger))
+    {
+        return logger;
+    }
+    return nullptr;
+}
+
+std::shared_ptr<Logger> make_logger(std::string const &name, std::vector<std::shared_ptr<LoggerSink>> sinks)
+{
+    auto logger = std::make_shared<Logger>(name, sinks);
+    if (logger && register_logger(logger))
+    {
+        return logger;
+    }
+    return nullptr;
 }
 
 std::shared_ptr<Logger> make_none_logger(std::string const &name)
@@ -637,6 +799,27 @@ std::shared_ptr<Logger> make_none_logger(std::string const &name)
 std::shared_ptr<Logger> make_stdout_logger(std::string const &name, LogLevel level)
 {
     return make_logger(name, std::make_shared<sink::Stdout>(level));
+}
+
+std::shared_ptr<Logger> make_file_logger(std::string const &name, std::string const &filepath, LogLevel level, bool to_stdout, bool flush_on_write)
+{
+    std::vector<std::shared_ptr<LoggerSink>> sinks;
+    if (to_stdout) {
+        sinks.push_back(std::make_shared<sink::Stdout>(level));
+    }
+    sinks.push_back(std::make_shared<sink::File>(level, filepath, 0, 1, flush_on_write));
+    return make_logger(name, sinks);
+}
+
+std::shared_ptr<Logger> make_rotating_file_logger(std::string const &name, std::string const &filepath,
+    LogLevel level, size_t max_file_size, size_t max_files, bool to_stdout, bool flush_on_write)
+{
+    std::vector<std::shared_ptr<LoggerSink>> sinks;
+    if (to_stdout) {
+        sinks.push_back(std::make_shared<sink::Stdout>(level));
+    }
+    sinks.push_back(std::make_shared<sink::File>(level, filepath, max_file_size, max_files, flush_on_write));
+    return make_logger(name, sinks);
 }
 
 void set_logger_level(const std::string& name, LogLevel level)

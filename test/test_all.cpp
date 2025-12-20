@@ -10,11 +10,17 @@
  * 
  */
 
-#include <slog/slog.hpp>
+
+
 #include <iostream>
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <fstream>
+#include <filesystem>
+
+#include <slog/slog.hpp>
+#include <slog/sink_file.hpp>
 
 // Test basic logger creation and logging
 void test_basic_logging() {
@@ -433,6 +439,147 @@ void test_log_limiting() {
 }
 
 // Test global logger level rules
+// Test file sink with thread safety
+void test_file_sink() {
+    std::cout << "\n=== Test: File Sink ===" << std::endl;
+    
+    const std::string test_log_file = "/tmp/test_slog.log";
+    
+    // Clean up old test files
+    try {
+        if (std::filesystem::exists(test_log_file)) {
+            std::filesystem::remove(test_log_file);
+        }
+        for (int i = 1; i <= 5; ++i) {
+            std::string old_file = test_log_file + "." + std::to_string(i);
+            if (std::filesystem::exists(old_file)) {
+                std::filesystem::remove(old_file);
+            }
+        }
+    } catch (...) {
+        std::cout << "Failed to clean up old test files" << std::endl;
+    }
+    
+    // Test 1: Basic file logging
+    std::cout << "\nTest 1: Basic file logging" << std::endl;
+    {
+        auto logger = slog::make_file_logger("file_test", test_log_file, slog::LogLevel::Debug);
+        logger->debug("This is a debug message to file");
+        logger->info("This is an info message to file");
+        logger->warning("This is a warning message to file");
+        logger->error("This is an error message to file");
+    }
+    
+    // Verify file was created and contains logs
+    if (std::filesystem::exists(test_log_file)) {
+        std::ifstream file(test_log_file);
+        std::string line;
+        int line_count = 0;
+        while (std::getline(file, line)) {
+            line_count++;
+        }
+        std::cout << "File created successfully with " << line_count << " lines" << std::endl;
+    } else {
+        std::cout << "ERROR: File was not created!" << std::endl;
+    }
+    
+    // Test 2: Multiple loggers writing to same file (thread safety)
+    std::cout << "\nTest 2: Multiple loggers writing to same file (thread safety test)" << std::endl;
+    {
+        auto logger1 = slog::make_file_logger("logger1", test_log_file, slog::LogLevel::Info);
+        auto logger2 = slog::make_file_logger("logger2", test_log_file, slog::LogLevel::Info);
+        auto logger3 = slog::make_file_logger("logger3", test_log_file, slog::LogLevel::Info);
+        
+        std::vector<std::thread> threads;
+        
+        // Create multiple threads writing to the same file
+        for (int i = 0; i < 3; ++i) {
+            threads.emplace_back([&logger1, i]() {
+                for (int j = 0; j < 10; ++j) {
+                    logger1->info("Logger1 thread {} message {}", i, j);
+                }
+            });
+            
+            threads.emplace_back([&logger2, i]() {
+                for (int j = 0; j < 10; ++j) {
+                    logger2->info("Logger2 thread {} message {}", i, j);
+                }
+            });
+            
+            threads.emplace_back([&logger3, i]() {
+                for (int j = 0; j < 10; ++j) {
+                    logger3->info("Logger3 thread {} message {}", i, j);
+                }
+            });
+        }
+        
+        for (auto& t : threads) {
+            t.join();
+        }
+        
+        std::cout << "Multiple loggers and threads test completed" << std::endl;
+    }
+    
+    // Test 3: File rotation
+    std::cout << "\nTest 3: File rotation" << std::endl;
+    const std::string rotation_test_file = "/tmp/test_rotation.log";
+    
+    // Clean up old rotation test files
+    try {
+        if (std::filesystem::exists(rotation_test_file)) {
+            std::filesystem::remove(rotation_test_file);
+        }
+        for (int i = 1; i <= 5; ++i) {
+            std::string old_file = rotation_test_file + "." + std::to_string(i);
+            if (std::filesystem::exists(old_file)) {
+                std::filesystem::remove(old_file);
+            }
+        }
+    } catch (...) {
+        // Ignore
+    }
+    
+    {
+
+        // Clean up test files
+        try {
+            std::filesystem::remove(rotation_test_file);
+            for (int i = 1; i <= 3; ++i) {
+                std::string old_file = rotation_test_file + "." + std::to_string(i);
+                if (std::filesystem::exists(old_file)) {
+                    std::filesystem::remove(old_file);
+                }
+            }
+        } catch (...) {
+            // Ignore cleanup errors
+        }
+
+        // Create logger with small file size limit (1KB)
+        auto logger = slog::make_rotating_file_logger("rotation_test", rotation_test_file, 
+                                                    slog::LogLevel::Info, 1024, 3);
+        
+        // Write enough data to trigger rotation
+        for (int i = 0; i < 100; ++i) {
+            logger->info("This is a long log message for rotation test - message number {}", i);
+        }
+        
+        std::cout << "Rotation test completed" << std::endl;
+    }
+    
+    // Check if rotated files exist
+    int rotated_files = 0;
+    for (int i = 1; i <= 3; ++i) {
+        std::string old_file = rotation_test_file + "." + std::to_string(i);
+        if (std::filesystem::exists(old_file)) {
+            rotated_files++;
+        }
+    }
+    std::cout << "Found " << rotated_files << " rotated file(s)" << std::endl;
+    
+    
+    std::cout << "File sink tests completed successfully!" << std::endl;
+}
+
 void test_global_logger_level_rules() {
     std::cout << "\n=== Test 16: Global Logger Level Rules ===" << std::endl;
     
@@ -584,6 +731,7 @@ int main() {
         test_none_sink();
         test_global_logging();
         test_log_limiting();
+        test_file_sink();
         test_global_logger_level_rules();
         
         std::cout << "\n========================================" << std::endl;

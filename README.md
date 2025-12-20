@@ -24,6 +24,7 @@
 ### 📦 内置 Sink
 
 - **Stdout Sink**：标准输出，支持彩色输出（可选），自动添加时间戳和日志等级
+- **File Sink**：文件输出，线程安全，支持文件轮转，多logger写入同一文件
 - **None Sink**：静默 sink，不输出任何日志，用于关闭日志输出
 
 ## 快速开始
@@ -72,6 +73,38 @@ slog::error("Error: {}", "something wrong");
 SLOG_INFO("User {} logged in", username);
 SLOG_ERROR("Failed to connect: {}", error_code);
 ```
+
+### 文件日志
+
+```cpp
+#include "../src/sink_file.hpp"
+
+// 创建文件logger
+auto logger = slog::sink::make_file_logger(
+    "my_app",                  // logger名称
+    "/tmp/my_app.log",         // 日志文件路径
+    slog::LogLevel::Info,      // 日志等级
+    10 * 1024 * 1024,         // 最大文件大小：10MB
+    5,                         // 保留5个旧日志文件
+    true                       // 每次写入后立即刷新
+);
+
+logger->info("Application started");
+logger->error("An error occurred");
+
+// 多线程安全使用
+std::vector<std::thread> threads;
+for (int i = 0; i < 10; ++i) {
+    threads.emplace_back([&logger, i]() {
+        logger->info("Thread {} is logging", i);
+    });
+}
+for (auto& t : threads) {
+    t.join();
+}
+```
+
+详细的文件Sink使用说明请参见 [docs/file_sink_usage.md](docs/file_sink_usage.md)。
 
 ## 详细功能
 
@@ -294,6 +327,16 @@ make install
 // 创建标准输出 logger
 auto logger = slog::make_stdout_logger("name", slog::LogLevel::Info);
 
+// 创建文件 logger
+auto file_logger = slog::sink::make_file_logger(
+    "name", 
+    "/path/to/log.txt",
+    slog::LogLevel::Info,
+    10 * 1024 * 1024,  // 10MB
+    5,                 // 保留5个旧文件
+    true               // 立即刷新
+);
+
 // 创建静默 logger
 auto silent = slog::make_none_logger("name");
 
@@ -418,7 +461,9 @@ private:
 
 ## 示例
 
-完整示例请参考 `test/test_all.cpp` 文件。
+完整示例请参考：
+- `test/test_all.cpp` - 所有功能的测试示例
+- `examples/example_file_sink.cpp` - 文件Sink使用示例
 
 ## 许可证
 

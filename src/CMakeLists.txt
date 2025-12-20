@@ -5,6 +5,8 @@ option(SLOG_STDOUT_COLOR "Enable color output for stdout sink" ON)
 # Source files for the library
 set(SLOG_SOURCES
     slog_logger.cpp
+    sink_stdout.cpp
+    sink_file.cpp
     fmt/format.cc
 )
 
