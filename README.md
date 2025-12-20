@@ -76,21 +76,58 @@ SLOG_ERROR("Failed to connect: {}", error_code);
 
 ### 文件日志
 
-```cpp
-#include "../src/sink_file.hpp"
+文件日志功能支持将日志输出到文件，并可选择同时输出到标准输出（stdout）。内置的 stdout 和 file sink 默认启用。
 
-// 创建文件logger
-auto logger = slog::sink::make_file_logger(
+#### 基本文件日志
+
+```cpp
+// 创建文件logger（仅输出到文件）
+auto logger = slog::make_file_logger(
+    "my_app",                  // logger名称
+    "/tmp/my_app.log",         // 日志文件路径
+    slog::LogLevel::Info,      // 日志等级
+    false,                     // 不输出到stdout（默认false）
+    true                       // 每次写入后立即刷新（默认true）
+);
+
+// 创建文件logger（同时输出到文件和stdout）
+auto logger_with_stdout = slog::make_file_logger(
+    "my_app",
+    "/tmp/my_app.log",
+    slog::LogLevel::Info,
+    true,                      // 同时输出到stdout
+    true
+);
+
+logger->info("Application started");
+logger->error("An error occurred");
+```
+
+#### 自动轮转的文件日志
+
+```cpp
+// 创建自动轮转的文件logger（同时输出到文件和stdout）
+auto rotating_logger = slog::make_rotating_file_logger(
     "my_app",                  // logger名称
     "/tmp/my_app.log",         // 日志文件路径
     slog::LogLevel::Info,      // 日志等级
     10 * 1024 * 1024,         // 最大文件大小：10MB
     5,                         // 保留5个旧日志文件
+    true,                      // 同时输出到stdout
     true                       // 每次写入后立即刷新
 );
 
-logger->info("Application started");
-logger->error("An error occurred");
+// 当文件达到10MB时，会自动轮转：
+// my_app.log -> my_app.log.1
+// my_app.log.1 -> my_app.log.2
+// ... 最多保留5个旧文件
+```
+
+#### 多线程安全使用
+
+```cpp
+auto logger = slog::make_file_logger("my_app", "/tmp/my_app.log", 
+                                     slog::LogLevel::Info, false, true);
 
 // 多线程安全使用
 std::vector<std::thread> threads;
@@ -104,7 +141,6 @@ for (auto& t : threads) {
 }
 ```
 
-详细的文件Sink使用说明请参见 [docs/file_sink_usage.md](docs/file_sink_usage.md)。
 
 ## 详细功能
 
@@ -256,6 +292,48 @@ logger2->info("Message from child1");
 logger3->info("Message from child2");
 ```
 
+#### 从默认 Logger 克隆
+
+更常见的实践是从默认 logger 中克隆一个 logger 对象。特别适用于软件子模块开发时使用，让模块能够在实际运行时，根据主进程的日志设定运行。
+
+```cpp
+// 主进程设置默认logger
+auto main_logger = slog::make_file_logger("main", "/tmp/main.log", 
+                                          slog::LogLevel::Info, true, true);
+slog::set_default_logger("main");
+
+// 子模块从默认logger克隆，继承相同的sink配置
+auto driver_logger = slog::default_logger()->clone("driver");
+auto camera_logger = slog::default_logger()->clone("camera");
+
+// 这些logger会输出到相同的文件，但日志中会显示不同的logger名称
+driver_logger->info("Driver initialized");
+camera_logger->info("Camera opened");
+```
+
+#### 克隆并设置新的日志等级
+
+克隆时可以指定新的日志等级，适用于需要不同日志详细程度的子模块：
+
+```cpp
+auto parent_logger = slog::make_stdout_logger("parent", slog::LogLevel::Info);
+
+// 克隆并设置更详细的日志等级
+auto debug_logger = parent_logger->clone("debug_module", slog::LogLevel::Debug);
+
+// 克隆并设置更严格的日志等级
+auto error_logger = parent_logger->clone("error_module", slog::LogLevel::Error);
+
+debug_logger->debug("This will be shown");   // 会输出
+parent_logger->debug("This won't be shown"); // 不会输出（等级是Info）
+error_logger->info("This won't be shown");   // 不会输出（等级是Error）
+```
+
+**使用场景**：
+- **子模块开发**：子模块不需要知道主进程的日志配置，只需从默认logger克隆即可
+- **日志分类**：通过不同的logger名称区分不同模块的日志，同时共享相同的输出目标
+- **动态配置**：主进程可以动态调整默认logger的配置，所有克隆的logger会自动继承新的配置
+
 ### 动态修改日志等级
 
 ```cpp
@@ -327,13 +405,32 @@ make install
 // 创建标准输出 logger
 auto logger = slog::make_stdout_logger("name", slog::LogLevel::Info);
 
-// 创建文件 logger
-auto file_logger = slog::sink::make_file_logger(
+// 创建文件 logger（仅输出到文件）
+auto file_logger = slog::make_file_logger(
     "name", 
+    "/path/to/log.txt",
+    slog::LogLevel::Info,
+    false,             // 不输出到stdout
+    true               // 立即刷新
+);
+
+// 创建文件 logger（同时输出到文件和stdout）
+auto file_logger_with_stdout = slog::make_file_logger(
+    "name",
+    "/path/to/log.txt",
+    slog::LogLevel::Info,
+    true,              // 同时输出到stdout
+    true
+);
+
+// 创建自动轮转的文件 logger
+auto rotating_logger = slog::make_rotating_file_logger(
+    "name",
     "/path/to/log.txt",
     slog::LogLevel::Info,
     10 * 1024 * 1024,  // 10MB
     5,                 // 保留5个旧文件
+    true,              // 同时输出到stdout
     true               // 立即刷新
 );
 
@@ -463,7 +560,7 @@ private:
 
 完整示例请参考：
 - `test/test_all.cpp` - 所有功能的测试示例
-- `examples/example_file_sink.cpp` - 文件Sink使用示例
+- `test/test_file_sink.cpp` - 文件Sink使用示例
 
 ## 许可证
 
