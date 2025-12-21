@@ -1,3 +1,8 @@
+# cmake for simple-log library
+# author: Liu Chuansen
+# email: 179712066@qq.com
+# date: 2025-12-04
+
 cmake_minimum_required(VERSION 3.10)
 project(simple_log VERSION 0.2 LANGUAGES CXX)
 
@@ -9,9 +14,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Set build type to Debug if not specified
 if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Debug)
+    set(CMAKE_BUILD_TYPE Release)
 endif()
-
 
 # Compiler options
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -28,8 +32,38 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+# Option: Enable spdlog support (default ON)
+option(BUILD_WITH_SPDLOG "Build with spdlog support" ON)
+option(BUILD_WITH_LIBFMT "Build with libfmt support" ON)
+
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
+
+# Try to find system fmt library
+if (BUILD_WITH_LIBFMT)
+    find_package(fmt QUIET)
+    if(fmt_FOUND)
+        message(STATUS "Found library fmt: ${fmt_VERSION}")
+        set(BUILD_WITH_LIBFMT ON)
+    else()
+        message(STATUS "Library fmt not found, using bundled fmt")
+        set(BUILD_WITH_LIBFMT OFF)
+    endif()
+endif()
+
+# Try to find spdlog
+if(BUILD_WITH_SPDLOG)
+    find_package(spdlog QUIET)
+    if(spdlog_FOUND)
+        message(STATUS "Found library spdlog: ${spdlog_VERSION}")
+        set(BUILD_WITH_SPDLOG ON)
+    else()
+        message(STATUS "BUILD_WITH_SPDLOG is ON but spdlog not found. Disabling spdlog support.")
+        set(BUILD_WITH_SPDLOG OFF)
+    endif()
+else()
+    message(STATUS "BUILD_WITH_SPDLOG is OFF. Use -DBUILD_WITH_SPDLOG=ON to enable.")
+endif()
 
 # Add source
 add_subdirectory(src)
@@ -40,7 +74,17 @@ message(STATUS "Version: ${PROJECT_VERSION}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
+if (BUILD_WITH_LIBFMT)
+message(STATUS "Build with libfmt: ${fmt_VERSION}")
+else()
+message(STATUS "Build with bundled fmt")
+endif()
 message(STATUS "Stdout color output: ${SLOG_STDOUT_COLOR}")
+if(BUILD_WITH_SPDLOG)
+    message(STATUS "Build with spdlog: ${spdlog_VERSION}")
+else()
+    message(STATUS "Build without spdlog supported")
+endif()
 
 # Add test subdirectory
 enable_testing()

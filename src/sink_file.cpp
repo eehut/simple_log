@@ -17,6 +17,7 @@
 #include <unordered_map>
 
 #include "slog/sink_file.hpp"
+
 namespace slog {
 namespace sink {
 

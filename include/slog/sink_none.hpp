@@ -26,8 +26,8 @@ class None: public LoggerSink
 public:
     explicit None(LogLevel level = LogLevel::Off) : level_(level) { }
 
-    std::shared_ptr<LoggerSink> clone(std::string const & logger_name) const override {
-
+    std::shared_ptr<LoggerSink> clone(std::string const & logger_name) const override 
+    {
         // 如果名称一样，则返回空
         if (logger_name == name_){
             return nullptr;
@@ -38,26 +38,31 @@ public:
         return sink;
     }
 
-    bool setup(std::string const & name) override {
+    bool setup(std::string const & name) override 
+    {
         name_ = name;
         return true;
     }
 
-    void log(LogLevel level, std::string const &msg) override {
+    void log(LogLevel level, std::string const &msg) override 
+    {
         // 空实现，不输出任何内容
         (void)level;  // 避免未使用参数警告
         (void)msg;    // 避免未使用参数警告
     }
 
-    void set_level(LogLevel level) override {
+    void set_level(LogLevel level) override 
+    {
         level_ = level;
     }
 
-    LogLevel get_level() const override { 
+    LogLevel get_level() const override 
+    { 
         return level_; 
     }
 
-    const char* name() const override { 
+    const char* name() const override 
+    { 
         return "None"; 
     }
 

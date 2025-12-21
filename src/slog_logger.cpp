@@ -17,6 +17,10 @@
 #include "slog/sink_none.hpp"
 #include "slog/sink_file.hpp"
 
+#ifdef BUILD_WITH_SPDLOG
+#include "slog/sink_spdlog.hpp"
+#endif
+
 namespace slog {
 
 //#define SLOG_DEBUG_ENABLE 1
@@ -793,7 +797,7 @@ std::shared_ptr<Logger> make_logger(std::string const &name, std::vector<std::sh
 
 std::shared_ptr<Logger> make_none_logger(std::string const &name)
 {
-    return make_logger(name, std::make_shared<sink::None>());
+    return make_logger(name, std::make_shared<sink::None>(LogLevel::Off));
 }
 
 std::shared_ptr<Logger> make_stdout_logger(std::string const &name, LogLevel level)
@@ -822,6 +826,38 @@ std::shared_ptr<Logger> make_rotating_file_logger(std::string const &name, std::
     return make_logger(name, sinks);
 }
 
+#ifdef BUILD_WITH_SPDLOG
+std::shared_ptr<Logger> make_spdlog_logger(std::string const &name, LogLevel level, bool async)
+{
+    auto sink = std::make_shared<sink::Spdlog>(level, sink::SpdlogSinkType::ToConsole, "", async);
+    return make_logger(name, sink);
+}
+
+
+std::shared_ptr<Logger> make_spdlog_logger(std::string const &name, std::string const &filepath, LogLevel level, bool to_console, bool async)
+{
+    if (filepath.empty()) {
+        std::cerr << "**ERROR** make_spdlog_logger(): filepath is empty" << std::endl;
+        return nullptr;
+    }
+
+    int sink_type = sink::SpdlogSinkType::ToFile;
+    if (to_console) {
+        sink_type |= sink::SpdlogSinkType::ToConsole;
+    }
+
+    auto sink = std::make_shared<sink::Spdlog>(level, sink_type, filepath, async);
+    return make_logger(name, sink);
+}
+#endif // BUILD_WITH_SPDLOG
+
+
+/**
+ * @brief 设置 logger 的日志等级
+ * 
+ * @param name logger名称
+ * @param level 日志等级
+ */
 void set_logger_level(const std::string& name, LogLevel level)
 {
     detail::LoggerRegistry::instance().set_logger_level_rule(name, level);

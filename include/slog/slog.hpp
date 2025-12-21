@@ -27,8 +27,14 @@
 #include <unordered_map>
 #include <map>
 
-#include <slog/fmt/format.h>
 
+#ifdef BUILD_WITH_LIBFMT
+// Use system fmt library
+#include <fmt/format.h>
+#else 
+// Use bundled fmt library
+#include <slog/fmt/format.h>
+#endif 
 
 namespace slog 
 {
@@ -439,8 +445,11 @@ std::shared_ptr<Logger> make_stdout_logger(std::string const &name, LogLevel lev
  * @param flush_on_write 是否每次写入后立即刷新，默认true
  * @return std::shared_ptr<Logger> 
  */
-std::shared_ptr<Logger> make_file_logger(std::string const &name, std::string const &filepath, LogLevel level = LogLevel::Info, 
-    bool to_stdout = false, bool flush_on_write = true);
+std::shared_ptr<Logger> make_file_logger(std::string const &name, 
+    std::string const &filepath, 
+    LogLevel level = LogLevel::Info, 
+    bool to_stdout = false, 
+    bool flush_on_write = true);
 
 
 /**
@@ -455,8 +464,42 @@ std::shared_ptr<Logger> make_file_logger(std::string const &name, std::string co
  * @param flush_on_write 是否每次写入后立即刷新，默认true
  * @return std::shared_ptr<Logger> 
  */
-std::shared_ptr<Logger> make_rotating_file_logger(std::string const &name, std::string const &filepath, LogLevel level = LogLevel::Info, 
-    size_t max_file_size = 10 * 1024 * 1024, size_t max_files = 5, bool to_stdout = false, bool flush_on_write = true);
+std::shared_ptr<Logger> make_rotating_file_logger(std::string const &name, 
+    std::string const &filepath, 
+    LogLevel level = LogLevel::Info, 
+    size_t max_file_size = 10 * 1024 * 1024, 
+    size_t max_files = 5, 
+    bool to_stdout = false, 
+    bool flush_on_write = true);
+
+#ifdef BUILD_WITH_SPDLOG
+/**
+ * @brief 创建 spdlog console logger
+ * 
+ * @param name logger名称
+ * @param level 日志等级，默认Info
+ * @param async 是否使用异步模式，默认false（同步）
+ * @return std::shared_ptr<Logger> 
+ */
+std::shared_ptr<Logger> make_spdlog_logger(std::string const &name, 
+    LogLevel level = LogLevel::Info,
+    bool async = false);
+
+/**
+ * @brief 创建 spdlog file logger
+ * 
+ * @param name logger名称
+ * @param filepath 日志文件路径
+ * @param level 日志等级，默认Info
+ * @param async 是否使用异步模式，默认false（同步）
+ * @return std::shared_ptr<Logger> 
+ */
+std::shared_ptr<Logger> make_spdlog_logger(std::string const &name,
+    std::string const &filepath,
+    LogLevel level = LogLevel::Info,
+    bool to_console = false,
+    bool async = false);
+#endif // BUILD_WITH_SPDLOG
 
 
 /**

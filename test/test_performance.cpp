@@ -8,7 +8,7 @@
  * 测试日志库在不同场景下的性能表现
  */
 
-#include <slog/slog.hpp>
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -18,17 +18,29 @@
 #include <filesystem>
 #include <cstring>
 
+
+#include <slog/slog.hpp>
+
+#ifdef BUILD_WITH_SPDLOG
+#define ENABLE_SPDLOG 1
+#endif
+
 // 测试配置
 struct TestConfig 
 {
-    std::string log_type = "stdout";    // stdout 或 file
+    std::string log_type = "stdout";    // stdout 或 file 或 spdlog-file 或 spdlog-console
     std::string log_file = "/tmp/perf_test.log";
     int log_count = 100000;             // 日志总数
     int thread_count = 1;               // 线程数量
-    bool flush_on_write = false;        // 是否立即刷新
+    bool flush_on_write = false;        // 是否立即刷新(file专用)
+#ifdef ENABLE_SPDLOG
+    bool spdlog = false;                // 是否使用spdlog
+    bool async = false;                // 是否使用异步模式(spdlog专用)
+#endif 
     slog::LogLevel level = slog::LogLevel::Info;
     
-    void print() const {
+    void print() const 
+    {
         std::cout << "========================================" << std::endl;
         std::cout << "  Performance Test Configuration" << std::endl;
         std::cout << "========================================" << std::endl;
@@ -37,6 +49,16 @@ struct TestConfig
             std::cout << "Log File        : " << log_file << std::endl;
             std::cout << "Flush On Write  : " << (flush_on_write ? "Yes" : "No") << std::endl;
         }
+#ifdef ENABLE_SPDLOG
+        if (log_type == "spdlog-file") {
+            std::cout << "Log File        : " << log_file << std::endl;
+        }
+#endif
+#ifdef ENABLE_SPDLOG
+        if (log_type == "spdlog-file" || log_type == "spdlog-console") {
+            std::cout << "Async          : " << (async ? "Yes" : "No") << std::endl;
+        }
+#endif 
         std::cout << "Total Logs      : " << log_count << std::endl;
         std::cout << "Thread Count    : " << thread_count << std::endl;
         std::cout << "Log Level       : " << slog::log_level_name(level) << std::endl;
@@ -74,7 +96,8 @@ struct TestResult
  */
 std::shared_ptr<slog::Logger> create_logger(TestConfig const & config, bool clean_file = false)
 {
-    if (config.log_type == "file") {
+    if (config.log_type == "file") 
+    {
         // 只在明确指定时才清理旧的日志文件
         if (clean_file && std::filesystem::exists(config.log_file)) {
             std::filesystem::remove(config.log_file);
@@ -88,7 +111,35 @@ std::shared_ptr<slog::Logger> create_logger(TestConfig const & config, bool clea
             false,
             config.flush_on_write
         );
-    } else {
+    } 
+    #ifdef ENABLE_SPDLOG
+    else if (config.log_type == "spdlog-file") 
+    {
+        // 只在明确指定时才清理旧的日志文件
+        if (clean_file && std::filesystem::exists(config.log_file)) {
+            std::filesystem::remove(config.log_file);
+        }
+        
+        // 创建文件logger，不轮转（max_file_size = 0）
+        return slog::make_spdlog_logger(
+            "perf_test",
+            config.log_file,
+            config.level,
+            false,
+            config.async
+        );
+    }
+    else if (config.log_type == "spdlog-console") 
+    {
+        return slog::make_spdlog_logger(
+            "perf_test",
+            config.level,
+            config.async
+        );
+    }
+    #endif // ENABLE_SPDLOG
+    else 
+    {
         // 创建stdout logger
         return slog::make_stdout_logger("perf_test", config.level);
     }
@@ -175,11 +226,14 @@ void print_usage(const char* prog_name)
 {
     std::cout << "Usage: " << prog_name << " [options]\n\n"
               << "Options:\n"
-              << "  -t, --type <type>        Log type: stdout or file (default: stdout)\n"
+              << "  -t, --type <type>        Log type: stdout,file,spdlog-file,spdlog-console (default: stdout)\n"
               << "  -f, --file <path>        Log file path (default: /tmp/perf_test.log)\n"
               << "  -n, --count <number>     Total number of logs (default: 100000)\n"
               << "  -j, --threads <number>   Number of threads for multi-thread test (default: 1)\n"
               << "  -F, --flush              Enable flush on write for file logger (default: off)\n"
+#ifdef ENABLE_SPDLOG
+              << "  -a, --async              Enable async mode for spdlog (default: off)\n"
+#endif 
               << "  -l, --level <level>      Log level: trace/debug/info/warning/error (default: info)\n"
               << "  -h, --help               Show this help message\n\n"
               << "Examples:\n"
@@ -206,11 +260,20 @@ bool parse_args(int argc, char* argv[], TestConfig& config)
         else if (arg == "-t" || arg == "--type") {
             if (i + 1 < argc) {
                 config.log_type = argv[++i];
+#ifdef ENABLE_SPDLOG
+                if (config.log_type != "stdout" && config.log_type != "file" 
+                    && config.log_type != "spdlog-file" && config.log_type != "spdlog-console") {
+                    std::cerr << "Error: Invalid log type '" << config.log_type 
+                              << "'. Must be 'stdout', 'file', 'spdlog-file', or 'spdlog-console'." << std::endl;
+                    return false;
+                }
+#else
                 if (config.log_type != "stdout" && config.log_type != "file") {
                     std::cerr << "Error: Invalid log type '" << config.log_type 
                               << "'. Must be 'stdout' or 'file'." << std::endl;
                     return false;
                 }
+#endif
             } else {
                 std::cerr << "Error: --type requires an argument" << std::endl;
                 return false;
@@ -251,6 +314,11 @@ bool parse_args(int argc, char* argv[], TestConfig& config)
         else if (arg == "-F" || arg == "--flush") {
             config.flush_on_write = true;
         }
+#ifdef ENABLE_SPDLOG
+        else if (arg == "-a" || arg == "--async") {
+            config.async = true;
+        }
+#endif 
         else if (arg == "-l" || arg == "--level") {
             if (i + 1 < argc) {
                 std::string level_str = argv[++i];
@@ -317,7 +385,8 @@ int main(int argc, char* argv[])
     config.print();
     
     // 清理旧的日志文件（只在测试开始前清理一次）
-    if (config.log_type == "file" && std::filesystem::exists(config.log_file)) {
+    if ((config.log_type == "file" || config.log_type == "spdlog-file") 
+        && std::filesystem::exists(config.log_file)) {
         std::filesystem::remove(config.log_file);
         std::cout << "\n[Cleanup] Removed old log file: " << config.log_file << std::endl;
     }
@@ -338,7 +407,7 @@ int main(int argc, char* argv[])
         }
         
         // 如果是文件日志，验证输出
-        if (config.log_type == "file") {
+        if (config.log_type == "file" || config.log_type == "spdlog-file") {
             // 确保所有logger都已销毁，文件已关闭
             // 短暂延迟以确保文件系统更新
             std::this_thread::sleep_for(std::chrono::milliseconds(100));

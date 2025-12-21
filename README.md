@@ -26,6 +26,7 @@
 - **Stdout Sink**：标准输出，支持彩色输出（可选），自动添加时间戳和日志等级
 - **File Sink**：文件输出，线程安全，支持文件轮转，多logger写入同一文件
 - **None Sink**：静默 sink，不输出任何日志，用于关闭日志输出
+- **Spdlog Sink**（可选）：基于 spdlog 的 console 和 file logger，支持同步/异步模式，多线程安全，无缓存
 
 ## 快速开始
 
@@ -141,6 +142,56 @@ for (auto& t : threads) {
 }
 ```
 
+### Spdlog 集成（可选）
+
+如果编译时启用了 spdlog 支持（`-DBUILD_WITH_SPDLOG=ON`），可以使用基于 spdlog 的 logger，提供更高的性能和更丰富的功能。
+
+#### 基本使用
+
+```cpp
+#ifdef BUILD_WITH_SPDLOG
+    // 创建同步 console logger
+    auto console_logger = slog::make_spdlog_console_logger("app", slog::LogLevel::Info);
+    
+    // 创建异步 file logger（性能更好，适合高并发场景）
+    auto file_logger = slog::make_spdlog_file_logger("app", "/tmp/app.log", 
+                                                      slog::LogLevel::Debug, true);
+    
+    // 使用方式与标准 slog API 完全一致
+    console_logger->info("Hello from spdlog console");
+    file_logger->debug("Hello from spdlog file");
+#endif
+```
+
+#### 同步 vs 异步模式
+
+- **同步模式**（`async=false`，默认）：
+  - 日志立即写入，适合调试和低并发场景
+  - 线程安全，但每次写入都会阻塞调用线程
+  
+- **异步模式**（`async=true`）：
+  - 日志先放入队列，后台线程异步写入
+  - 性能更好，适合高并发场景
+  - 队列大小：16384，线程池：1 线程
+  - 队列满时阻塞等待，确保不丢失日志
+
+```cpp
+#ifdef BUILD_WITH_SPDLOG
+    // 同步模式（适合调试）
+    auto sync_logger = slog::make_spdlog_console_logger("sync", slog::LogLevel::Info, false);
+    
+    // 异步模式（适合生产环境）
+    auto async_logger = slog::make_spdlog_file_logger("async", "/tmp/async.log", 
+                                                       slog::LogLevel::Info, true);
+#endif
+```
+
+#### 特性
+
+- **多线程安全**：默认使用 spdlog 的 `_mt` 版本（多线程安全）
+- **无缓存**：关闭 spdlog 的缓存功能，立即刷新，确保日志及时写入
+- **格式统一**：日志格式与 simple_log 保持一致
+- **无需依赖**：用户代码无需包含 spdlog 头文件，完全封装在 simple_log 内部
 
 ## 详细功能
 
@@ -439,6 +490,25 @@ auto silent = slog::make_none_logger("name");
 
 // 创建自定义 sink 的 logger
 auto custom = slog::make_logger("name", custom_sink);
+
+// 创建 spdlog console logger（同步）
+auto spdlog_console = slog::make_spdlog_logger("name", slog::LogLevel::Info, false);
+
+// 创建 spdlog console logger（异步）
+auto spdlog_console_async = slog::make_spdlog_logger("name", slog::LogLevel::Info, true);
+
+// 创建 spdlog file logger（同步）
+auto spdlog_file = slog::make_spdlog_logger("name", "/path/to/log.txt", slog::LogLevel::Info, false, false);
+
+// 创建 spdlog file logger（异步）
+auto spdlog_file_async = slog::make_spdlog_logger("name", "/path/to/log.txt", slog::LogLevel::Info, false, true);
+
+// 创建 spdlog file and console logger（同步）
+auto spdlog_file = slog::make_spdlog_logger("name", "/path/to/log.txt", slog::LogLevel::Info, true, false);
+
+// 创建 spdlog file and console logger（异步）
+auto spdlog_file_async = slog::make_spdlog_logger("name", "/path/to/log.txt", slog::LogLevel::Info, true, true);
+
 ```
 
 ### Logger 方法
