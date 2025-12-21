@@ -32,37 +32,37 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# Option: Enable spdlog support (default ON)
-option(BUILD_WITH_SPDLOG "Build with spdlog support" ON)
-option(BUILD_WITH_LIBFMT "Build with libfmt support" ON)
+# 配置选项，使用SLOG_前缀，避免冲突
+# 是否开启SPDLOG相关sink支持
+option(SLOG_SINK_SPDLOG "Build with spdlog support" ON)
+# 是否使用外部libfmt库
+option(SLOG_EXTERNAM_LIBFMT "Build with external libfmt" ON)
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # Try to find system fmt library
-if (BUILD_WITH_LIBFMT)
+set(BUILD_WITH_LIBFMT OFF CACHE INTERNAL "Internal: whether to use system fmt")
+if (SLOG_EXTERNAM_LIBFMT)
     find_package(fmt QUIET)
     if(fmt_FOUND)
         message(STATUS "Found library fmt: ${fmt_VERSION}")
         set(BUILD_WITH_LIBFMT ON)
     else()
         message(STATUS "Library fmt not found, using bundled fmt")
-        set(BUILD_WITH_LIBFMT OFF)
     endif()
 endif()
 
 # Try to find spdlog
-if(BUILD_WITH_SPDLOG)
+set(BUILD_WITH_SPDLOG OFF CACHE INTERNAL "Internal: whether spdlog is available")
+if(SLOG_SINK_SPDLOG)
     find_package(spdlog QUIET)
     if(spdlog_FOUND)
         message(STATUS "Found library spdlog: ${spdlog_VERSION}")
         set(BUILD_WITH_SPDLOG ON)
     else()
-        message(STATUS "BUILD_WITH_SPDLOG is ON but spdlog not found. Disabling spdlog support.")
-        set(BUILD_WITH_SPDLOG OFF)
+        message(STATUS "SLOG_SINK_SPDLOG is ON but spdlog not found. Disabling spdlog support.")
     endif()
-else()
-    message(STATUS "BUILD_WITH_SPDLOG is OFF. Use -DBUILD_WITH_SPDLOG=ON to enable.")
 endif()
 
 # Add source
