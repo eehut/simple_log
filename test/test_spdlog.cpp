@@ -15,7 +15,9 @@
 #include <thread>
 #include <chrono>
 #include <fstream>
-#include <filesystem>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cstdio>
 
 #include <slog/slog.hpp>
 
@@ -53,8 +55,9 @@ void test_spdlog_file_sync() {
     std::string filepath = "/tmp/test_spdlog_sync.log";
     
     // Remove existing file if any
-    if (std::filesystem::exists(filepath)) {
-        std::filesystem::remove(filepath);
+    struct stat st;
+    if (stat(filepath.c_str(), &st) == 0) {
+        std::remove(filepath.c_str());
     }
     
     auto logger = slog::make_spdlog_logger("test_file_sync", filepath, slog::LogLevel::Trace, false);
@@ -66,7 +69,8 @@ void test_spdlog_file_sync() {
     logger->error("This is an error message to file");
     
     // Verify file was created and contains content
-    if (std::filesystem::exists(filepath)) {
+    struct stat st2;
+    if (stat(filepath.c_str(), &st2) == 0) {
         std::cout << "File created successfully: " << filepath << std::endl;
         std::ifstream file(filepath);
         std::string line;
@@ -87,8 +91,9 @@ void test_spdlog_file_async() {
     std::string filepath = "/tmp/test_spdlog_async.log";
     
     // Remove existing file if any
-    if (std::filesystem::exists(filepath)) {
-        std::filesystem::remove(filepath);
+    struct stat st;
+    if (stat(filepath.c_str(), &st) == 0) {
+        std::remove(filepath.c_str());
     }
     
     auto logger = slog::make_spdlog_logger("test_file_async", filepath, slog::LogLevel::Info, false, true);
@@ -101,7 +106,8 @@ void test_spdlog_file_async() {
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     
     // Verify file was created and contains content
-    if (std::filesystem::exists(filepath)) {
+    struct stat st2;
+    if (stat(filepath.c_str(), &st2) == 0) {
         std::cout << "File created successfully: " << filepath << std::endl;
         std::ifstream file(filepath);
         std::string line;

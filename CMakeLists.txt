@@ -7,8 +7,11 @@ cmake_minimum_required(VERSION 3.10)
 project(simple_log VERSION 0.2 LANGUAGES CXX)
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Default to C++14 for compatibility with older compilers (e.g., gcc 7.5)
+# Users can override with -DSLOG_CXX_STANDARD=17 to use C++17 features
+# option(SLOG_CXX_STANDARD "C++ standard version (14 or 17)" 14)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED OFF)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -36,14 +39,14 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # 是否开启SPDLOG相关sink支持
 option(SLOG_SINK_SPDLOG "Build with spdlog support" ON)
 # 是否使用外部libfmt库
-option(SLOG_EXTERNAM_LIBFMT "Build with external libfmt" ON)
+option(SLOG_EXTERNAL_LIBFMT "Build with external libfmt" ON)
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # Try to find system fmt library
 set(BUILD_WITH_LIBFMT OFF CACHE INTERNAL "Internal: whether to use system fmt")
-if (SLOG_EXTERNAM_LIBFMT)
+if (SLOG_EXTERNAL_LIBFMT)
     find_package(fmt QUIET)
     if(fmt_FOUND)
         message(STATUS "Found library fmt: ${fmt_VERSION}")

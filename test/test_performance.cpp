@@ -15,7 +15,9 @@
 #include <thread>
 #include <chrono>
 #include <iomanip>
-#include <filesystem>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cstdio>
 #include <cstring>
 
 
@@ -99,8 +101,11 @@ std::shared_ptr<slog::Logger> create_logger(TestConfig const & config, bool clea
     if (config.log_type == "file") 
     {
         // 只在明确指定时才清理旧的日志文件
-        if (clean_file && std::filesystem::exists(config.log_file)) {
-            std::filesystem::remove(config.log_file);
+        if (clean_file) {
+            struct stat st;
+            if (stat(config.log_file.c_str(), &st) == 0) {
+                std::remove(config.log_file.c_str());
+            }
         }
         
         // 创建文件logger，不轮转（max_file_size = 0）
@@ -116,8 +121,11 @@ std::shared_ptr<slog::Logger> create_logger(TestConfig const & config, bool clea
     else if (config.log_type == "spdlog-file") 
     {
         // 只在明确指定时才清理旧的日志文件
-        if (clean_file && std::filesystem::exists(config.log_file)) {
-            std::filesystem::remove(config.log_file);
+        if (clean_file) {
+            struct stat st;
+            if (stat(config.log_file.c_str(), &st) == 0) {
+                std::remove(config.log_file.c_str());
+            }
         }
         
         // 创建文件logger，不轮转（max_file_size = 0）
@@ -347,12 +355,13 @@ bool parse_args(int argc, char* argv[], TestConfig& config)
  */
 void verify_file_output(std::string const & filepath, int expected_lines)
 {
-    if (!std::filesystem::exists(filepath)) {
+    struct stat st;
+    if (stat(filepath.c_str(), &st) != 0) {
         std::cout << "\n⚠️  Warning: Log file does not exist!" << std::endl;
         return;
     }
     
-    auto file_size = std::filesystem::file_size(filepath);
+    auto file_size = static_cast<size_t>(st.st_size);
     std::cout << "\n=== File Output Verification ===" << std::endl;
     std::cout << "File Path       : " << filepath << std::endl;
     std::cout << "File Size       : " << file_size << " bytes" << std::endl;
@@ -385,10 +394,12 @@ int main(int argc, char* argv[])
     config.print();
     
     // 清理旧的日志文件（只在测试开始前清理一次）
-    if ((config.log_type == "file" || config.log_type == "spdlog-file") 
-        && std::filesystem::exists(config.log_file)) {
-        std::filesystem::remove(config.log_file);
-        std::cout << "\n[Cleanup] Removed old log file: " << config.log_file << std::endl;
+    if (config.log_type == "file" || config.log_type == "spdlog-file") {
+        struct stat st;
+        if (stat(config.log_file.c_str(), &st) == 0) {
+            std::remove(config.log_file.c_str());
+            std::cout << "\n[Cleanup] Removed old log file: " << config.log_file << std::endl;
+        }
     }
     
     std::vector<TestResult> results;

@@ -432,18 +432,18 @@ simple_log 提供以下 CMake 配置选项（使用 `-D` 参数设置）：
   - 如果找到 spdlog 库，则启用 spdlog 功能；如果未找到，会自动禁用并提示
   - 示例：`cmake -DSLOG_SINK_SPDLOG=ON ..`
 
-- **`SLOG_EXTERNAM_LIBFMT`**（默认：`ON`）
+- **`SLOG_EXTERNAL_LIBFMT`**（默认：`ON`）
   - 是否使用系统安装的 fmt 库
   - 设置为 `ON` 时，会尝试查找系统安装的 fmt 库
   - 如果找到 fmt 库，则使用系统版本；如果未找到，会使用 simple_log 内置的 fmt
-  - 示例：`cmake -DSLOG_EXTERNAM_LIBFMT=OFF ..`（强制使用内置 fmt）
+  - 示例：`cmake -DSLOG_EXTERNAL_LIBFMT=OFF ..`（强制使用内置 fmt）
 
-> **⚠️ 重要提示**：使用 spdlog 时，建议同时启用外部 libfmt（`SLOG_EXTERNAM_LIBFMT=ON`）。
+> **⚠️ 重要提示**：使用 spdlog 时，建议同时启用外部 libfmt（`SLOG_EXTERNAL_LIBFMT=ON`）。
 > 
 > 原因：
 > - spdlog 库通常依赖系统安装的 fmt 库
 > - 如果启用 spdlog 但关闭外部 fmt（使用内置 fmt），可能会因为版本不兼容或符号冲突导致编译错误
-> - 推荐配置：`-DSLOG_SINK_SPDLOG=ON -DSLOG_EXTERNAM_LIBFMT=ON`（这也是默认配置）
+> - 推荐配置：`-DSLOG_SINK_SPDLOG=ON -DSLOG_EXTERNAL_LIBFMT=ON`（这也是默认配置）
 
 #### 配置示例
 
@@ -457,10 +457,10 @@ make
 cmake -DSLOG_SINK_SPDLOG=OFF ..
 
 # 禁用 spdlog，强制使用内置 fmt
-cmake -DSLOG_SINK_SPDLOG=OFF -DSLOG_EXTERNAM_LIBFMT=OFF ..
+cmake -DSLOG_SINK_SPDLOG=OFF -DSLOG_EXTERNAL_LIBFMT=OFF ..
 
 # 启用 spdlog，强制使用内置 fmt（不推荐，可能导致编译错误）
-cmake -DSLOG_SINK_SPDLOG=ON -DSLOG_EXTERNAM_LIBFMT=OFF ..
+cmake -DSLOG_SINK_SPDLOG=ON -DSLOG_EXTERNAL_LIBFMT=OFF ..
 ```
 
 ### 编译

@@ -3,11 +3,13 @@
  * @brief 测试文件sink修复：验证多个logger写入同一文件时所有日志都能正确保存
  */
 
-#include <filesystem>
 #include <fstream>
 #include <thread>
 #include <vector>
 #include <iostream>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cstdio>
 
 #include <slog/slog.hpp>
 
@@ -19,8 +21,9 @@ void test_multiple_loggers_same_file()
     const std::string test_file = "/tmp/test_file_sink.log";
     
     // 清理旧文件
-    if (std::filesystem::exists(test_file)) {
-        std::filesystem::remove(test_file);
+    struct stat st;
+    if (stat(test_file.c_str(), &st) == 0) {
+        std::remove(test_file.c_str());
     }
     
     std::cout << "=== Test: Multiple Loggers Writing to Same File ===" << std::endl;
@@ -72,8 +75,9 @@ void test_multithreaded_logging()
     const std::string test_file = "/tmp/test_file_sink_multithread.log";
     
     // 清理旧文件
-    if (std::filesystem::exists(test_file)) {
-        std::filesystem::remove(test_file);
+    struct stat st;
+    if (stat(test_file.c_str(), &st) == 0) {
+        std::remove(test_file.c_str());
     }
     
     std::cout << "\n=== Test: Multithreaded Logging ===" << std::endl;

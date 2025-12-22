@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Test build script for different CMake configurations
-# Tests all combinations of BUILD_WITH_SPDLOG and BUILD_WITH_LIBFMT options
+# Tests all combinations of SLOG_SINK_SPDLOG and SLOG_EXTERNAL_LIBFMT options
 
 set -e  # Exit immediately if a command exits with a non-zero status
 
@@ -44,8 +44,8 @@ for config in "${configs[@]}"; do
     
     echo -e "${YELLOW}========================================${NC}"
     echo -e "${YELLOW}Testing configuration:${NC}"
-    echo -e "  BUILD_WITH_SPDLOG=${spdlog_flag}"
-    echo -e "  BUILD_WITH_LIBFMT=${fmt_flag}"
+    echo -e "  SLOG_SINK_SPDLOG=${spdlog_flag}"
+    echo -e "  SLOG_EXTERNAL_LIBFMT=${fmt_flag}"
     echo -e "${YELLOW}========================================${NC}"
     
     # Create build directory
@@ -55,12 +55,12 @@ for config in "${configs[@]}"; do
     # Configure with cmake
     echo "Running cmake configuration..."
     cmake "$SCRIPT_DIR" \
-        -DBUILD_WITH_SPDLOG="${spdlog_flag}" \
-        -DBUILD_WITH_LIBFMT="${fmt_flag}" \
+        -DSLOG_SINK_SPDLOG="${spdlog_flag}" \
+        -DSLOG_EXTERNAL_LIBFMT="${fmt_flag}" \
         -DCMAKE_BUILD_TYPE=Release
     
     if [ $? -ne 0 ]; then
-        echo -e "${RED}ERROR: cmake configuration failed for BUILD_WITH_SPDLOG=${spdlog_flag}, BUILD_WITH_LIBFMT=${fmt_flag}${NC}"
+        echo -e "${RED}ERROR: cmake configuration failed for SLOG_SINK_SPDLOG=${spdlog_flag}, SLOG_EXTERNAL_LIBFMT=${fmt_flag}${NC}"
         exit 1
     fi
     
@@ -69,7 +69,7 @@ for config in "${configs[@]}"; do
     cmake --build . -j$(nproc)
     
     if [ $? -ne 0 ]; then
-        echo -e "${RED}ERROR: build failed for BUILD_WITH_SPDLOG=${spdlog_flag}, BUILD_WITH_LIBFMT=${fmt_flag}${NC}"
+        echo -e "${RED}ERROR: build failed for SLOG_SINK_SPDLOG=${spdlog_flag}, SLOG_EXTERNAL_LIBFMT=${fmt_flag}${NC}"
         exit 1
     fi
     

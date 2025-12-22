@@ -17,7 +17,9 @@
 #include <thread>
 #include <chrono>
 #include <fstream>
-#include <filesystem>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cstdio>
 
 #include <slog/slog.hpp>
 #include <slog/sink_file.hpp>
@@ -446,18 +448,15 @@ void test_file_sink() {
     const std::string test_log_file = "/tmp/test_slog.log";
     
     // Clean up old test files
-    try {
-        if (std::filesystem::exists(test_log_file)) {
-            std::filesystem::remove(test_log_file);
+    struct stat st;
+    if (stat(test_log_file.c_str(), &st) == 0) {
+        std::remove(test_log_file.c_str());
+    }
+    for (int i = 1; i <= 5; ++i) {
+        std::string old_file = test_log_file + "." + std::to_string(i);
+        if (stat(old_file.c_str(), &st) == 0) {
+            std::remove(old_file.c_str());
         }
-        for (int i = 1; i <= 5; ++i) {
-            std::string old_file = test_log_file + "." + std::to_string(i);
-            if (std::filesystem::exists(old_file)) {
-                std::filesystem::remove(old_file);
-            }
-        }
-    } catch (...) {
-        std::cout << "Failed to clean up old test files" << std::endl;
     }
     
     // Test 1: Basic file logging
@@ -471,7 +470,8 @@ void test_file_sink() {
     }
     
     // Verify file was created and contains logs
-    if (std::filesystem::exists(test_log_file)) {
+    struct stat st2;
+    if (stat(test_log_file.c_str(), &st2) == 0) {
         std::ifstream file(test_log_file);
         std::string line;
         int line_count = 0;
@@ -525,33 +525,29 @@ void test_file_sink() {
     const std::string rotation_test_file = "/tmp/test_rotation.log";
     
     // Clean up old rotation test files
-    try {
-        if (std::filesystem::exists(rotation_test_file)) {
-            std::filesystem::remove(rotation_test_file);
+    struct stat st3;
+    if (stat(rotation_test_file.c_str(), &st3) == 0) {
+        std::remove(rotation_test_file.c_str());
+    }
+    for (int i = 1; i <= 5; ++i) {
+        std::string old_file = rotation_test_file + "." + std::to_string(i);
+        if (stat(old_file.c_str(), &st3) == 0) {
+            std::remove(old_file.c_str());
         }
-        for (int i = 1; i <= 5; ++i) {
-            std::string old_file = rotation_test_file + "." + std::to_string(i);
-            if (std::filesystem::exists(old_file)) {
-                std::filesystem::remove(old_file);
-            }
-        }
-    } catch (...) {
-        // Ignore
     }
     
     {
 
         // Clean up test files
-        try {
-            std::filesystem::remove(rotation_test_file);
-            for (int i = 1; i <= 3; ++i) {
-                std::string old_file = rotation_test_file + "." + std::to_string(i);
-                if (std::filesystem::exists(old_file)) {
-                    std::filesystem::remove(old_file);
-                }
+        struct stat st4;
+        if (stat(rotation_test_file.c_str(), &st4) == 0) {
+            std::remove(rotation_test_file.c_str());
+        }
+        for (int i = 1; i <= 3; ++i) {
+            std::string old_file = rotation_test_file + "." + std::to_string(i);
+            if (stat(old_file.c_str(), &st4) == 0) {
+                std::remove(old_file.c_str());
             }
-        } catch (...) {
-            // Ignore cleanup errors
         }
 
         // Create logger with small file size limit (1KB)
@@ -568,9 +564,10 @@ void test_file_sink() {
     
     // Check if rotated files exist
     int rotated_files = 0;
+    struct stat st5;
     for (int i = 1; i <= 3; ++i) {
         std::string old_file = rotation_test_file + "." + std::to_string(i);
-        if (std::filesystem::exists(old_file)) {
+        if (stat(old_file.c_str(), &st5) == 0) {
             rotated_files++;
         }
     }

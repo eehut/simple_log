@@ -13,8 +13,10 @@
 #include <iomanip>
 #include <chrono>
 #include <ctime>
-#include <filesystem>
 #include <unordered_map>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cstdio>
 
 #include "slog/sink_file.hpp"
 
@@ -75,16 +77,14 @@ bool File::setup(std::string const & name)
     if (!file_state_->file.is_open()) 
     {
         // 检查文件是否已存在，如果存在则获取当前大小
-        if (std::filesystem::exists(filepath_)) 
+        struct stat st;
+        if (stat(filepath_.c_str(), &st) == 0) 
         {
-            try 
-            {
-                file_state_->current_size = std::filesystem::file_size(filepath_);
-            } 
-            catch (...) 
-            {
-                file_state_->current_size = 0;
-            }
+            file_state_->current_size = static_cast<size_t>(st.st_size);
+        }
+        else 
+        {
+            file_state_->current_size = 0;
         }
         
         // 以追加模式打开文件
@@ -225,22 +225,14 @@ void File::rotate_files()
         file_state_->file.close();
     }
     
-    namespace fs = std::filesystem;
-    
     // 删除最旧的文件
     if (file_state_->max_files > 0) 
     {
         std::string oldest_file = filepath_ + "." + std::to_string(file_state_->max_files);
-        if (fs::exists(oldest_file)) 
+        struct stat st;
+        if (stat(oldest_file.c_str(), &st) == 0) 
         {
-            try 
-            {
-                fs::remove(oldest_file);
-            } 
-            catch (...) 
-            {
-                // 忽略删除错误
-            }
+            std::remove(oldest_file.c_str());
         }
     }
     
@@ -250,16 +242,10 @@ void File::rotate_files()
         std::string old_name = (i == 1) ? filepath_ : (filepath_ + "." + std::to_string(i - 1));
         std::string new_name = filepath_ + "." + std::to_string(i);
         
-        if (fs::exists(old_name)) 
+        struct stat st;
+        if (stat(old_name.c_str(), &st) == 0) 
         {
-            try 
-            {
-                fs::rename(old_name, new_name);
-            } 
-            catch (...) 
-            {
-                // 忽略重命名错误
-            }
+            std::rename(old_name.c_str(), new_name.c_str());
         }
     }
     
