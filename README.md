@@ -627,11 +627,11 @@ SLOG_WARNING(fmt, ...);
 SLOG_ERROR(fmt, ...);
 
 // Logger 专用宏
-LOGGER_TRACE(logger, fmt, ...);
-LOGGER_DEBUG(logger, fmt, ...);
-LOGGER_INFO(logger, fmt, ...);
-LOGGER_WARNING(logger, fmt, ...);
-LOGGER_ERROR(logger, fmt, ...);
+LOCAL_TRACE(logger, fmt, ...);
+LOCAL_DEBUG(logger, fmt, ...);
+LOCAL_INFO(logger, fmt, ...);
+LOCAL_WARNING(logger, fmt, ...);
+LOCAL_ERROR(logger, fmt, ...);
 ```
 
 ## 扩展 Sink

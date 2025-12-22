@@ -662,19 +662,19 @@ inline void error_limited(std::string const &tag, int allowed_num, fmt::format_s
     slog::error(FMT_STRING(fmt), ##__VA_ARGS__)
 
 
-#define LOGGER_TRACE(logger, fmt, ...) \
-    logger->trace(FMT_STRING(fmt), ##__VA_ARGS__)
+#define LOCAL_TRACE(local_logger, fmt, ...) \
+    local_logger->trace(FMT_STRING(fmt), ##__VA_ARGS__)
 
-#define LOGGER_DEBUG(logger, fmt, ...) \
-    logger->debug(FMT_STRING(fmt), ##__VA_ARGS__)
+#define LOCAL_DEBUG(local_logger, fmt, ...) \
+    local_logger->debug(FMT_STRING(fmt), ##__VA_ARGS__)
 
-#define LOGGER_INFO(logger, fmt, ...) \
-    logger->info(FMT_STRING(fmt), ##__VA_ARGS__)
+#define LOCAL_INFO(local_logger, fmt, ...) \
+    local_logger->info(FMT_STRING(fmt), ##__VA_ARGS__)
 
-#define LOGGER_WARNING(logger, fmt, ...) \
-    logger->warning(FMT_STRING(fmt), ##__VA_ARGS__)
+#define LOCAL_WARNING(local_logger, fmt, ...) \
+    local_logger->warning(FMT_STRING(fmt), ##__VA_ARGS__)
 
-#define LOGGER_ERROR(logger, fmt, ...) \
-    logger->error(FMT_STRING(fmt), ##__VA_ARGS__)
+#define LOCAL_ERROR(local_logger, fmt, ...) \
+    local_logger->error(FMT_STRING(fmt), ##__VA_ARGS__)
 
 #endif  // __SLOG_H__
