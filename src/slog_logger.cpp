@@ -304,7 +304,7 @@ std::shared_ptr<Logger> Logger::clone(std::string const & logger_name) const
 {
     if (logger_name == name_)
     {
-        return nullptr;
+        return default_logger();
     }
     
     // 克隆所有sink
@@ -323,7 +323,7 @@ std::shared_ptr<Logger> Logger::clone(std::string const & logger_name) const
     
     if (cloned_sinks.empty())
     {
-        return nullptr;
+        return default_logger();
     }
 
     __debug("clone logger: %s", logger_name.c_str());
@@ -338,7 +338,7 @@ std::shared_ptr<Logger> Logger::clone(std::string const & logger_name, LogLevel 
 {
     if (logger_name == name_)
     {
-        return nullptr;
+        return default_logger();
     }
     
     // 克隆所有sink
@@ -358,7 +358,7 @@ std::shared_ptr<Logger> Logger::clone(std::string const & logger_name, LogLevel 
     
     if (cloned_sinks.empty())
     {
-        return nullptr;
+        return default_logger();
     }
 
     __debug("clone logger: %s", logger_name.c_str());
@@ -391,12 +391,20 @@ public:
         return reg;
     }
 
+     /**
+     * @brief 检查注册表是否为空
+     * 
+     */
+     bool empty() const {
+        return registry_.empty();
+    }
+
     /**
-     * @brief 获取默认logger
+     * @brief 获取默认logger, 如果不存在，则创建一个
      * 
      * @return std::shared_ptr<Logger> 
      */
-    std::shared_ptr<Logger> get_default() {
+    std::shared_ptr<Logger> get_default(const std::string& logger_name = "default") {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!default_logger_) {
             // 如果注册表中有logger，使用第一个
@@ -404,11 +412,12 @@ public:
                 default_logger_ = registry_.begin()->second;
             } else {
                 // 创建默认logger
-                default_logger_ = std::make_shared<Logger>("default", std::make_shared<sink::Stdout>(LogLevel::Info));
+                default_logger_ = std::make_shared<Logger>(logger_name, std::make_shared<sink::Stdout>(LogLevel::Info));
             }
         }
         return default_logger_;
     }
+
 
     /**
      * @brief 注册一个logger
@@ -456,10 +465,10 @@ public:
 
     /**
      * @brief 获取指定名称的logger
-     * 
-     * @param name logger名称
+    * 
+    * @param name logger名称
      * @return std::shared_ptr<Logger> logger指针，如果不存在返回nullptr
-     */
+    */
     std::shared_ptr<Logger> get_logger(const std::string& name) 
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -762,7 +771,17 @@ bool set_default_logger(const std::string& name)
 
 std::shared_ptr<Logger> get_logger(const std::string& name) 
 {
-    return detail::LoggerRegistry::instance().get_logger(name);
+    // 先找一下，指定名称的logger是否有
+    auto logger = detail::LoggerRegistry::instance().get_logger(name);
+    if (logger) {
+        return logger;
+    }
+    // 如果还没有创建logger， 就以这个名称创建一个默认的logger
+    if (detail::LoggerRegistry::instance().empty()) {
+        return detail::LoggerRegistry::instance().get_default(name);
+    }
+    // 否则，就从默认logger中复制一个
+    return default_logger()->clone(name);
 }
 
 bool has_logger(const std::string& name) 

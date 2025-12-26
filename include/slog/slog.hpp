@@ -358,6 +358,17 @@ private:
 std::shared_ptr<Logger> default_logger();
 
 /**
+ * @brief 从默认logger中克隆一个
+ * 
+ * @param name 新的logger的名称
+ * @return std::shared_ptr<Logger> 
+ */
+inline std::shared_ptr<Logger> clone(const std::string& name)
+{
+    return default_logger()->clone(name);
+}
+
+/**
 * @brief 注册一个logger到全局注册表
 * 
 * @param logger logger指针
@@ -376,10 +387,10 @@ bool register_logger(std::shared_ptr<Logger> logger);
 bool set_default_logger(const std::string& name);
 
 /**
-* @brief 获取指定名称的logger
-* 
+* @brief 获取指定名称的logger，如果不存在，则从默认logger中clone一个。
+*        如果默认logger不存在，它会以此名称创建一个默认logger
 * @param name logger名称
-* @return std::shared_ptr<Logger> logger指针，如果不存在返回nullptr
+* @return std::shared_ptr<Logger> logger指针，总是能返回一个可用的logger
 */
 std::shared_ptr<Logger> get_logger(const std::string& name);
 
