@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <regex>
+#include <mutex>
 
 #include "slog/slog.hpp"
 #include "slog/sink_stdout.hpp"
@@ -399,35 +400,45 @@ public:
         return registry_.empty();
     }
 
+
     /**
      * @brief 获取默认logger, 如果不存在，则创建一个
      * 
      * @return std::shared_ptr<Logger> 
      */
-    std::shared_ptr<Logger> get_default(const std::string& logger_name = "default") {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!default_logger_) {
+    std::shared_ptr<Logger> get_default(const std::string& logger_name = "default") 
+    {
+        std::shared_ptr<Logger> new_default_logger = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (default_logger_) {
+                return default_logger_;
+            }
             // 如果注册表中有logger，使用第一个
             if (!registry_.empty()) {
                 default_logger_ = registry_.begin()->second;
+                return default_logger_;
             } else {
-                // 创建默认logger
                 default_logger_ = std::make_shared<Logger>(logger_name, std::make_shared<sink::Stdout>(LogLevel::Info));
+                new_default_logger = default_logger_;
             }
         }
-        return default_logger_;
+
+        // 里面有锁，这里不需要加锁
+        register_logger(new_default_logger);
+        return new_default_logger;
     }
 
 
-    /**
+        /**
      * @brief 注册一个logger
      * 
      * @param logger logger指针
      * @return true 成功
      * @return false 失败（logger为空）
      */
-    bool register_logger(std::shared_ptr<Logger> logger) 
-    {
+     bool register_logger(std::shared_ptr<Logger> logger) 
+     { 
         if (!logger) {
             return false;
         }
@@ -443,7 +454,7 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         registry_[logger->name()] = logger;
         return true;
-    }
+     }
 
     /**
      * @brief 设置默认logger

@@ -17,6 +17,10 @@ if(BUILD_WITH_SPDLOG)
     target_link_libraries(test_spdlog PRIVATE slog_static)
 endif()
 
+# test slog with get logger
+add_executable(test_slog_get_logger test_get_logger.cpp)
+target_link_libraries(test_slog_get_logger PRIVATE slog_static)
+
 # Add custom target to run tests
 add_custom_target(run_test
     COMMAND test_slog_all
