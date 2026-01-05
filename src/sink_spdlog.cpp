@@ -84,7 +84,12 @@ std::shared_ptr<LoggerSink> Spdlog::clone(std::string const & logger_name) const
     
     // Create a new sink with same configuration
     auto sink = std::make_shared<Spdlog>(level_, sink_type_, filepath_, async_);
-    sink->setup(logger_name);
+    sink->name_ = logger_name;
+    // 使用spdlog自带的clone实现，避免重复打开相同文件的问题
+    auto logger = pimpl_->logger->clone(logger_name);
+    sink->pimpl_ = std::make_unique<SpdlogSinkImpl>(logger, async_);
+
+    //sink->setup(logger_name);
     return sink;
 }
 

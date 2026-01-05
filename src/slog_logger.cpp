@@ -329,7 +329,11 @@ std::shared_ptr<Logger> Logger::clone(std::string const & logger_name) const
 
     __debug("clone logger: %s", logger_name.c_str());
 
-    auto logger = std::make_shared<Logger>(logger_name, cloned_sinks);
+    auto logger = std::make_shared<Logger>();
+    logger->name_ = logger_name;
+    logger->sinks_ = cloned_sinks;
+    logger->valid_ = true;
+    logger->update_filter_level();
     register_logger(logger);
 
     return logger;
@@ -364,7 +368,11 @@ std::shared_ptr<Logger> Logger::clone(std::string const & logger_name, LogLevel 
 
     __debug("clone logger: %s", logger_name.c_str());
 
-    auto logger = std::make_shared<Logger>(logger_name, cloned_sinks);
+    auto logger = std::make_shared<Logger>();
+    logger->name_ = logger_name;
+    logger->sinks_ = cloned_sinks;
+    logger->valid_ = true;
+    logger->update_filter_level();
     register_logger(logger);
 
     return logger;

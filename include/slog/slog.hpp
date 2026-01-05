@@ -161,6 +161,12 @@ public:
     /// 共享指针
     using SharedPtr = std::shared_ptr<Logger>; 
 
+    /// @brief 默认构造函数
+    Logger() : valid_(false) {}
+
+    /// @brief 单sink构造函数
+    /// @param name logger名称
+    /// @param sink sink指针
     Logger(std::string const &name, std::shared_ptr<LoggerSink> sink = nullptr);
     
     /// @brief 多sink构造函数
