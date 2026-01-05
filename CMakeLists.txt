@@ -40,6 +40,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 option(SLOG_SINK_SPDLOG "Build with spdlog support" ON)
 # 是否使用外部libfmt库
 option(SLOG_EXTERNAL_LIBFMT "Build with external libfmt" ON)
+# 是否编译examples
+option(SLOG_BUILD_EXAMPLES "Build examples" OFF)
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -71,6 +73,11 @@ endif()
 # Add source
 add_subdirectory(src)
 
+# build examples (only if explicitly enabled)
+if(SLOG_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
+
 # Print configuration info
 message(STATUS "Project: ${PROJECT_NAME}")
 message(STATUS "Version: ${PROJECT_VERSION}")
@@ -88,6 +95,7 @@ if(BUILD_WITH_SPDLOG)
 else()
     message(STATUS "Build without spdlog supported")
 endif()
+message(STATUS "Build examples: ${SLOG_BUILD_EXAMPLES}")
 
 # Add test subdirectory
 enable_testing()
