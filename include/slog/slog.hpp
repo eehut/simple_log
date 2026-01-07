@@ -36,6 +36,11 @@
 #include <slog/fmt/format.h>
 #endif 
 
+/// 版本号定义
+#define SLOG_VERSION_MAJOR 0
+#define SLOG_VERSION_MINOR 3
+#define SLOG_VERSION_STRING "0.3"
+
 namespace slog 
 {
 
@@ -355,6 +360,16 @@ private:
 
 };
 
+
+/**
+* @brief 获取库版本号
+* 
+* @return const char* 版本号字符串，格式为 "major.minor"
+*/
+inline const char* version() noexcept
+{
+    return SLOG_VERSION_STRING;
+}
 
 /**
 * @brief 获取默认logger
