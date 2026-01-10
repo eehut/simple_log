@@ -57,8 +57,10 @@ for config in "${configs[@]}"; do
     cmake "$SCRIPT_DIR" \
         -DSLOG_SINK_SPDLOG="${spdlog_flag}" \
         -DSLOG_EXTERNAL_LIBFMT="${fmt_flag}" \
-        -DCMAKE_BUILD_TYPE=Release
-    
+        -DCMAKE_BUILD_TYPE=Release \
+        -DSLOG_BUILD_TEST=ON \
+        -DSLOG_BUILD_EXAMPLES=ON
+        
     if [ $? -ne 0 ]; then
         echo -e "${RED}ERROR: cmake configuration failed for SLOG_SINK_SPDLOG=${spdlog_flag}, SLOG_EXTERNAL_LIBFMT=${fmt_flag}${NC}"
         exit 1

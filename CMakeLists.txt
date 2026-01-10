@@ -4,7 +4,7 @@
 # date: 2025-12-04
 
 cmake_minimum_required(VERSION 3.10)
-project(simple_log VERSION 0.2 LANGUAGES CXX)
+project(simple_log VERSION 0.3 LANGUAGES CXX)
 
 # Set C++ standard
 # Default to C++14 for compatibility with older compilers (e.g., gcc 7.5)
@@ -42,6 +42,8 @@ option(SLOG_SINK_SPDLOG "Build with spdlog support" ON)
 option(SLOG_EXTERNAL_LIBFMT "Build with external libfmt" ON)
 # 是否编译examples
 option(SLOG_BUILD_EXAMPLES "Build examples" OFF)
+# 是否编译test
+option(SLOG_BUILD_TEST "Build test" OFF)
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -68,6 +70,23 @@ if(SLOG_SINK_SPDLOG)
     else()
         message(STATUS "SLOG_SINK_SPDLOG is ON but spdlog not found. Disabling spdlog support.")
     endif()
+endif()
+
+# Apply version to slog.hpp during configuration
+# This updates SLOG_VERSION_MAJOR, SLOG_VERSION_MINOR, and SLOG_VERSION_STRING
+# based on PROJECT_VERSION
+execute_process(
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version_apply.sh
+            ${CMAKE_CURRENT_SOURCE_DIR}/include/slog/slog.hpp
+            ${PROJECT_VERSION}
+    RESULT_VARIABLE VERSION_APPLY_RESULT
+    OUTPUT_VARIABLE VERSION_APPLY_OUTPUT
+    ERROR_VARIABLE VERSION_APPLY_ERROR
+)
+if(NOT VERSION_APPLY_RESULT EQUAL 0)
+    message(WARNING "Failed to apply version to slog.hpp: ${VERSION_APPLY_ERROR}")
+else()
+    message(STATUS "${VERSION_APPLY_OUTPUT}")
 endif()
 
 # Add source
@@ -97,9 +116,11 @@ else()
 endif()
 message(STATUS "Build examples: ${SLOG_BUILD_EXAMPLES}")
 
-# Add test subdirectory
-enable_testing()
-add_subdirectory(test)
+# Add test subdirectory     
+if(SLOG_BUILD_TEST)
+    enable_testing()
+    add_subdirectory(test)
+endif()
 
 # Install headers
 install(DIRECTORY include/slog
