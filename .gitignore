@@ -1,2 +1,5 @@
 /build
 /.cache
+/.vscode
+/.clangd
+/output
