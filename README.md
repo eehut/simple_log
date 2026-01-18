@@ -712,7 +712,11 @@ private:
 
 ## 许可证
 
+MIT License
+
 Copyright (c) 2023-2025 Liu Chuansen
+
+See [LICENSE](LICENSE) file for details.
 
 ## 作者
 
