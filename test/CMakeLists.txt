@@ -21,6 +21,10 @@ endif()
 add_executable(test_slog_get_logger test_get_logger.cpp)
 target_link_libraries(test_slog_get_logger PRIVATE slog_static)
 
+# test multi-line logging
+add_executable(test_slog_multi_lines test_multi_lines.cpp)
+target_link_libraries(test_slog_multi_lines PRIVATE slog_static)
+
 # Add custom target to run tests
 add_custom_target(run_test
     COMMAND test_slog_all

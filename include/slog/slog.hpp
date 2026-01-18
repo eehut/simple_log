@@ -212,6 +212,11 @@ public:
     /// @param msg 日志消息
     void log(LogLevel level, const char* msg);
 
+    /// @brief 显示多行日志，自动识别换行符并逐行输出
+    /// @param level 日志等级
+    /// @param msg 日志消息，可能包含 \r\n 或 \n 换行符
+    void log_lines(LogLevel level, std::string const &msg);
+
     /// @brief 显示十六进制数据
     /// @param level 日志等级
     /// @param data 数据地址
@@ -592,6 +597,16 @@ inline void log(LogLevel level, fmt::format_string<Args...> fmt, Args &&...args)
     default_logger()->log(level, fmt::format(fmt, std::forward<Args>(args)...));
 }
 
+/**
+ * @brief 全局多行日志函数，自动识别换行符并逐行输出
+ * @param level 日志等级
+ * @param msg 日志消息，可能包含 \r\n 或 \n 换行符
+ */
+inline void log_lines(LogLevel level, std::string const &msg)
+{
+    default_logger()->log_lines(level, msg);
+}
+
 template<typename... Args>
 inline void dump(LogLevel level, void const *data, size_t size, fmt::format_string<Args...> fmt, Args &&... args)
 {
@@ -666,6 +681,13 @@ inline void error_limited(std::string const &tag, int allowed_num, fmt::format_s
 
 } // namespace slog
 
+// Suppress warning about GNU extension for variadic macros
+// This is needed for compatibility with Clang on macOS
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
+#endif
+
 /**
  * @brief 日志宏，支持编译时格式字符串检查
  * 
@@ -708,5 +730,9 @@ inline void error_limited(std::string const &tag, int allowed_num, fmt::format_s
 
 #define LOCAL_ERROR(local_logger, fmt, ...) \
     local_logger->error(FMT_STRING(fmt), ##__VA_ARGS__)
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 
 #endif  // __SLOG_H__

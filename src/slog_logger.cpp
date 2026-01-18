@@ -153,6 +153,56 @@ void Logger::log(LogLevel level, const char* msg)
     }
 }
 
+void Logger::log_lines(LogLevel level, std::string const &msg) 
+{
+    if (!valid_ || static_cast<int>(level) < static_cast<int>(min_level_))
+    {
+        return;
+    }
+
+    if (msg.empty())
+    {
+        return;
+    }
+
+    // 边解析边输出，处理 \r\n, \n, \r 三种换行符
+    std::string current_line;
+    
+    for (size_t i = 0; i < msg.length(); ++i)
+    {
+        if (msg[i] == '\r')
+        {
+            // 检查是否是 \r\n
+            if (i + 1 < msg.length() && msg[i + 1] == '\n')
+            {
+                // 遇到 \r\n，立即输出当前行并跳过下一个字符
+                log(level, current_line);
+                current_line.clear();
+                ++i; // 跳过 \n
+            }
+            else
+            {
+                // 单独的 \r，立即输出当前行
+                log(level, current_line);
+                current_line.clear();
+            }
+        }
+        else if (msg[i] == '\n')
+        {
+            // 单独的 \n，立即输出当前行
+            log(level, current_line);
+            current_line.clear();
+        }
+        else
+        {
+            current_line += msg[i];
+        }
+    }
+    
+    // 输出最后一行（即使为空也要输出，以保持完整性）
+    log(level, current_line);
+}
+
 void Logger::log_data(LogLevel level, void const *data, size_t size, std::string const &msg) 
 {
     if (!valid_ || static_cast<int>(level) < static_cast<int>(min_level_))
