@@ -38,8 +38,8 @@
 
 /// 版本号定义
 #define SLOG_VERSION_MAJOR 0
-#define SLOG_VERSION_MINOR 3
-#define SLOG_VERSION_STRING "0.3"
+#define SLOG_VERSION_MINOR 4
+#define SLOG_VERSION_STRING "0.4"
 
 namespace slog 
 {
