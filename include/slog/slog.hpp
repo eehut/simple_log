@@ -224,12 +224,6 @@ public:
     /// @param msg 日志消息
     void log_data(LogLevel level, void const *data, size_t size, std::string const &msg);
 
-    /// @brief 显示vector中的数据
-    /// @param level 
-    /// @param data 
-    /// @param msg 
-    void log_data(LogLevel level, std::vector<uint8_t> const & data, std::string const &msg);
-
     /// @brief 具有限制属性的日志输出方法
     /// @param tag 限制的标签
     /// @param allowed_num 允许打印的日志数量
@@ -262,9 +256,15 @@ public:
     }
 
     template<typename... Args>
-    void dump(LogLevel level, std::vector<uint8_t> const & data, fmt::format_string<Args...> fmt, Args &&... args)
+    void dump(LogLevel level, std::vector<uint8_t> const & vec_data, fmt::format_string<Args...> fmt, Args &&... args)
     {
-        log_data(level, data, fmt::format(fmt, std::forward<Args>(args)...));        
+        log_data(level, vec_data.data(), vec_data.size(), fmt::format(fmt, std::forward<Args>(args)...));        
+    }
+
+    template<typename... Args>
+    void dump(LogLevel level, std::string const & str, fmt::format_string<Args...> fmt, Args &&... args)
+    {
+        log_data(level, str.data(), str.size(), fmt::format(fmt, std::forward<Args>(args)...));        
     }
 
     /// 以下是便捷函数
@@ -614,9 +614,15 @@ inline void dump(LogLevel level, void const *data, size_t size, fmt::format_stri
 }
 
 template<typename... Args>
-inline void dump(LogLevel level, std::vector<uint8_t> const & data, fmt::format_string<Args...> fmt, Args &&... args)
+inline void dump(LogLevel level, std::vector<uint8_t> const & vec_data, fmt::format_string<Args...> fmt, Args &&... args)
 {
-    default_logger()->log_data(level, data, fmt::format(fmt, std::forward<Args>(args)...));        
+    default_logger()->log_data(level, vec_data.data(), vec_data.size(), fmt::format(fmt, std::forward<Args>(args)...));        
+}
+
+template<typename... Args>
+inline void dump(LogLevel level, std::string const & str, fmt::format_string<Args...> fmt, Args &&... args)
+{
+    default_logger()->log_data(level, str.data(), str.size(), fmt::format(fmt, std::forward<Args>(args)...));        
 }
 
 template<typename... Args>

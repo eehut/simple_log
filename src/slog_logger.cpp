@@ -10,6 +10,7 @@
 #include <sstream>
 #include <cstdio>
 #include <cstdint>
+#include <cctype>
 #include <regex>
 #include <mutex>
 
@@ -210,77 +211,70 @@ void Logger::log_data(LogLevel level, void const *data, size_t size, std::string
         return;
     }
 
-    std::string hex;
-    std::size_t size_per_line = 16;
-    if (size >= size_per_line)
-    {
-        hex = "\r\n";
-    }
-    const uint8_t *array = static_cast<const uint8_t *>(data);
-    for (size_t i = 0; i < size; ++ i)
-    {
-        if (!(i % size_per_line))
-        {
-            if (i > 0)
-            {
-                hex += "\r\n";
-            }
-
-            char buf[32];
-            std::snprintf(buf, sizeof(buf), "%04zX: ", i);
-            hex += buf;
-        }
-
-        char buf[8];
-        std::snprintf(buf, sizeof(buf), "%02X ", array[i]);
-        hex += buf;
-    }
-
-    std::string full_msg = msg + hex;
-    // 遍历所有sink
-    for (auto& sink : sinks_)
-    {
-        sink->log(level, msg);
-    }
-}
-
-void Logger::log_data(LogLevel level, std::vector<uint8_t> const & data, std::string const &msg) 
-{
-    if (!valid_ || static_cast<int>(level) < static_cast<int>(min_level_))
+    if (size == 0)
     {
         return;
     }
 
-    std::string hex;
-    std::size_t size_per_line = 16;
-    if (data.size() >= size_per_line)
+    const uint8_t *array = static_cast<const uint8_t *>(data);
+    constexpr size_t size_per_line = 16;
+    std::string hex = "\r\n";
+    
+    // Process data line by line
+    for (size_t offset = 0; offset < size; offset += size_per_line)
     {
-        hex = "\r\n";
-    }
-    for (size_t i = 0; i < data.size(); ++ i)
-    {
-        if (!(i % size_per_line))
+        // Print address (8 hex digits)
+        char addr_buf[16];
+        std::snprintf(addr_buf, sizeof(addr_buf), "%04zx  ", offset);
+        hex += addr_buf;
+        
+        // Print hex bytes (16 bytes per line, with extra space after 8 bytes)
+        size_t line_end = (offset + size_per_line < size) ? (offset + size_per_line) : size;
+        for (size_t i = offset; i < line_end; ++i)
         {
-            if (i > 0)
+            char hex_buf[4];
+            std::snprintf(hex_buf, sizeof(hex_buf), "%02x ", array[i]);
+            hex += hex_buf;
+            
+            // Add extra space after 8 bytes
+            if ((i - offset + 1) % 8 == 0 && i + 1 < line_end)
             {
-                hex += "\r\n";
+                hex += ' ';
             }
-
-            char buf[32];
-            std::snprintf(buf, sizeof(buf), "%04zX: ", i);
-            hex += buf;
         }
-
-        char buf[8];
-        std::snprintf(buf, sizeof(buf), "%02X ", data[i]);
-        hex += buf;
+        
+        // Pad hex output if line is incomplete
+        if (line_end < offset + size_per_line)
+        {
+            size_t padding = (size_per_line - (line_end - offset)) * 3; // 3 chars per byte: "xx "
+            hex.append(padding, ' ');
+        }
+        
+        // Print ASCII representation with | delimiters
+        hex += " |";
+        for (size_t i = offset; i < line_end; ++i)
+        {
+            uint8_t byte = array[i];
+            if (std::isprint(static_cast<unsigned char>(byte)))
+            {
+                hex += static_cast<char>(byte);
+            }
+            else
+            {
+                hex += '.';
+            }
+        }
+        if (line_end == size)
+            hex += "|";
+        else
+            hex += "|\r\n";
     }
 
     std::string full_msg = msg + hex;
     // 遍历所有sink
     for (auto& sink : sinks_)
     {
-        sink->log(level, msg);
+        sink->log(level, full_msg);
     }
 }
 
