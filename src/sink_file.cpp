@@ -33,18 +33,6 @@ SharedFileState::SharedFileState(std::string const & path, size_t max_size, size
 }
 
 // File implementation
-File::File(LogLevel level, 
-          std::string const & filepath,
-          size_t max_file_size,
-          size_t max_files,
-          bool flush_on_write) 
-    : level_(level)
-    , filepath_(filepath)
-    , max_file_size_(max_file_size)
-    , max_files_(max_files)
-    , flush_on_write_(flush_on_write)
-{
-}
 
 File::~File() 
 {
@@ -52,45 +40,33 @@ File::~File()
     // 文件会在最后一个shared_ptr被销毁时自动关闭
 }
 
-std::shared_ptr<LoggerSink> File::clone(std::string const & logger_name) const 
+std::shared_ptr<LoggerSink> File::clone(const std::string & logger_name) const 
 {
-    // 如果名称一样，则返回空
-    if (logger_name == name_) 
-    {
-        return nullptr;
-    }
-
     auto sink = std::make_shared<File>(level_, filepath_, max_file_size_, max_files_, flush_on_write_);
     sink->setup(logger_name);
     return sink;
 }
 
-bool File::setup(std::string const & name) 
+bool File::setup(const std::string & logger_name) 
 {
-    name_ = name;
-    
+    (void)logger_name;
     // 获取或创建共享文件状态
     std::lock_guard<std::mutex> lock(get_file_mutex(filepath_));
     file_state_ = get_shared_file_state(filepath_, max_file_size_, max_files_, flush_on_write_);
     
     // 如果文件还没打开，则打开它
-    if (!file_state_->file.is_open()) 
-    {
+    if (!file_state_->file.is_open()) {
         // 检查文件是否已存在，如果存在则获取当前大小
         struct stat st;
-        if (stat(filepath_.c_str(), &st) == 0) 
-        {
+        if (stat(filepath_.c_str(), &st) == 0) {
             file_state_->current_size = static_cast<size_t>(st.st_size);
-        }
-        else 
-        {
+        } else {
             file_state_->current_size = 0;
         }
         
         // 以追加模式打开文件
         file_state_->file.open(filepath_, std::ios::out | std::ios::app);
-        if (!file_state_->file.is_open()) 
-        {
+        if (!file_state_->file.is_open()) {
             return false;
         }
     }
@@ -98,21 +74,14 @@ bool File::setup(std::string const & name)
     return true;
 }
 
-void File::log(LogLevel level, std::string const &msg) 
+void File::output(const std::string & logger_name, LogLevel level, std::string const &msg) 
 {    
-    // 等级不允许输出
-    if (static_cast<int>(level) < static_cast<int>(level_)) 
-    {
-        return;
-    }
-    
-    if (!file_state_) 
-    {
+    if (!file_state_) {
         return;
     }
     
     // 格式化日志消息
-    std::string formatted_msg = format_log_message(level, msg);
+    std::string formatted_msg = format_log_message(logger_name, level, msg);
     
     // 使用文件路径对应的mutex保护文件写入
     std::lock_guard<std::mutex> lock(get_file_mutex(filepath_));
@@ -125,27 +94,15 @@ void File::log(LogLevel level, std::string const &msg)
     }
     
     // 写入文件
-    if (file_state_->file.is_open()) 
-    {
+    if (file_state_->file.is_open()) {
         file_state_->file << formatted_msg;
         file_state_->current_size += formatted_msg.size();
         
         // 根据配置决定是否立即刷新
-        if (file_state_->flush_on_write) 
-        {
+        if (file_state_->flush_on_write) {
             file_state_->file.flush();
         }
     }
-}
-
-void File::set_level(LogLevel level) 
-{
-    level_ = level;
-}
-
-LogLevel File::get_level() const 
-{ 
-    return level_; 
 }
 
 const char* File::name() const 
@@ -169,10 +126,7 @@ std::mutex& File::get_file_mutex(std::string const & filepath)
 }
 
 std::shared_ptr<SharedFileState> File::get_shared_file_state(
-    std::string const & filepath,
-    size_t max_file_size,
-    size_t max_files,
-    bool flush_on_write)
+    std::string const & filepath, size_t max_file_size, size_t max_files, bool flush_on_write)
 {
     static std::unordered_map<std::string, std::weak_ptr<SharedFileState>> file_states;
     
@@ -192,7 +146,7 @@ std::shared_ptr<SharedFileState> File::get_shared_file_state(
     return state;
 }
 
-std::string File::format_log_message(LogLevel level, std::string const &msg) 
+std::string File::format_log_message(const std::string & logger_name, LogLevel level, std::string const &msg) 
 {
     auto now = std::chrono::system_clock::now();
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -206,7 +160,7 @@ std::string File::format_log_message(LogLevel level, std::string const &msg)
     oss << std::setfill('0') << std::setw(3) << ms % 1000;
     
     // output log level and logger name
-    oss << " <" << log_level_name(level) << "> (" << name_ << ") ";
+    oss << " <" << log_level_name(level) << "> (" << logger_name << ") ";
     oss << msg << "\n";
     
     return oss.str();

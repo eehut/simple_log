@@ -27,23 +27,16 @@ namespace sink {
 class Stdout: public LoggerSink
 {
 public:
-    explicit Stdout(LogLevel level);
+    explicit Stdout(LogLevel level) : LoggerSink(level) {}
     
-    std::shared_ptr<LoggerSink> clone(std::string const & logger_name) const override;
-    
-    bool setup(std::string const & name) override;
-    
-    void log(LogLevel level, std::string const &msg) override;
-    
-    void set_level(LogLevel level) override;
-    
-    LogLevel get_level() const override;
-    
+    std::shared_ptr<LoggerSink> clone(const std::string & logger_name) const override;
+        
     const char* name() const override;
 
+protected:
+    void output(const std::string & logger_name, LogLevel level, std::string const &msg) override;
+
 private:
-    std::string name_;
-    LogLevel level_;
     
     /// @brief 获取全局 stdout mutex（所有 Stdout sink 共享）
     /// @return std::mutex& 

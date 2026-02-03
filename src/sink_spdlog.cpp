@@ -33,6 +33,11 @@ struct SpdlogSinkImpl {
         : logger(std::move(l)), async(a) {}
 };
 
+// Custom deleter implementation
+void SpdlogSinkImplDeleter::operator()(SpdlogSinkImpl* p) {
+    delete p;
+}
+
 // Global mutex for async thread pool initialization
 static std::mutex s_async_init_mutex;
 static bool s_async_thread_pool_initialized = false;
@@ -61,11 +66,6 @@ static spdlog::level::level_enum to_spdlog_level(LogLevel level)
     }
 }
 
-Spdlog::Spdlog(LogLevel level, int sink_type, std::string const & filepath, bool async)
-    : level_(level), sink_type_(sink_type), filepath_(filepath), async_(async)
-{
-    // Initialization will be done in setup()
-}
 
 Spdlog::~Spdlog() 
 {
@@ -73,30 +73,23 @@ Spdlog::~Spdlog()
 }
 
 Spdlog::Spdlog(Spdlog &&) noexcept = default;
+
 Spdlog & Spdlog::operator=(Spdlog &&) noexcept = default;
 
 std::shared_ptr<LoggerSink> Spdlog::clone(std::string const & logger_name) const 
 {
-    // If name is the same, return nullptr
-    if (logger_name == name_) {
-        return nullptr;
-    }
-    
     // Create a new sink with same configuration
     auto sink = std::make_shared<Spdlog>(level_, sink_type_, filepath_, async_);
-    sink->name_ = logger_name;
     // 使用spdlog自带的clone实现，避免重复打开相同文件的问题
     auto logger = pimpl_->logger->clone(logger_name);
-    sink->pimpl_ = std::make_unique<SpdlogSinkImpl>(logger, async_);
+    sink->pimpl_ = std::unique_ptr<SpdlogSinkImpl, SpdlogSinkImplDeleter>(new SpdlogSinkImpl(logger, async_));
 
     //sink->setup(logger_name);
     return sink;
 }
 
-bool Spdlog::setup(std::string const & name) 
+bool Spdlog::setup(const std::string & logger_name) 
 {
-    name_ = name;
-    
     // Check if sink type is valid
     if (sink_type_ == SpdlogSinkType::NoSink) {
         return false;
@@ -132,7 +125,7 @@ bool Spdlog::setup(std::string const & name)
             
             // Create async logger with multiple sinks
             logger = std::make_shared<spdlog::async_logger>(
-                name,
+                logger_name,
                 sinks.begin(),
                 sinks.end(),
                 spdlog::thread_pool(),
@@ -140,7 +133,7 @@ bool Spdlog::setup(std::string const & name)
             );
         } else {
             // Create synchronous logger with multiple sinks
-            logger = std::make_shared<spdlog::logger>(name, sinks.begin(), sinks.end());
+            logger = std::make_shared<spdlog::logger>(logger_name, sinks.begin(), sinks.end());
         }
         
         // Set pattern to match simple_log format: [timestamp] [level] [logger_name] message
@@ -152,7 +145,7 @@ bool Spdlog::setup(std::string const & name)
         // Set level
         logger->set_level(to_spdlog_level(level_));
         
-        pimpl_ = std::make_unique<SpdlogSinkImpl>(logger, async_);
+        pimpl_ = std::unique_ptr<SpdlogSinkImpl, SpdlogSinkImplDeleter>(new SpdlogSinkImpl(logger, async_));
         
     } catch (const spdlog::spdlog_ex& ex) {
         return false;
@@ -161,13 +154,10 @@ bool Spdlog::setup(std::string const & name)
     return true;
 }
 
-void Spdlog::log(LogLevel level, std::string const &msg) 
+void Spdlog::output(const std::string & logger_name, LogLevel level, std::string const &msg) 
 {
-    // Check if level is allowed
-    if (static_cast<int>(level) < static_cast<int>(level_)) {
-        return;
-    }
-    
+    (void)logger_name;
+
     if (!pimpl_ || !pimpl_->logger) {
         return;
     }
@@ -179,17 +169,11 @@ void Spdlog::log(LogLevel level, std::string const &msg)
     pimpl_->logger->log(spdlog_level, msg);
 }
 
-void Spdlog::set_level(LogLevel level) 
+void Spdlog::on_level_changed(LogLevel level) 
 {
-    level_ = level;
     if (pimpl_ && pimpl_->logger) {
         pimpl_->logger->set_level(to_spdlog_level(level));
     }
-}
-
-LogLevel Spdlog::get_level() const 
-{
-    return level_;
 }
 
 const char* Spdlog::name() const 

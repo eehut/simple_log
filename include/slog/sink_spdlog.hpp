@@ -23,6 +23,11 @@ namespace sink {
 // Forward declaration for pimpl pattern
 struct SpdlogSinkImpl;
 
+// Custom deleter for SpdlogSinkImpl to work with incomplete type
+struct SpdlogSinkImplDeleter {
+    void operator()(SpdlogSinkImpl* p);
+};
+
 /**
  * @brief Spdlog Sink 类型标志
  * 
@@ -56,7 +61,11 @@ public:
      * @param filepath 日志文件路径（仅当启用 File 时需要）
      * @param async 是否使用异步模式，默认false（同步）
      */
-    explicit Spdlog(LogLevel level, int sink_type, std::string const & filepath = "", bool async = false);
+    explicit Spdlog(LogLevel level, int sink_type, std::string const & filepath = "", bool async = false)
+        : LoggerSink(level), sink_type_(sink_type), filepath_(filepath), async_(async)
+    {
+        // Initialization will be done in setup()
+    }
     
     ~Spdlog();
     
@@ -64,26 +73,22 @@ public:
     Spdlog(Spdlog const &) = delete;
     Spdlog & operator=(Spdlog const &) = delete;
     
-    // 允许移动
+    // 允许移动（在源文件中定义，避免需要完整类型）
     Spdlog(Spdlog &&) noexcept;
     Spdlog & operator=(Spdlog &&) noexcept;
     
-    std::shared_ptr<LoggerSink> clone(std::string const & logger_name) const override;
+    std::shared_ptr<LoggerSink> clone(const std::string & logger_name) const override;
     
-    bool setup(std::string const & name) override;
-    
-    void log(LogLevel level, std::string const &msg) override;
-    
-    void set_level(LogLevel level) override;
-    
-    LogLevel get_level() const override;
+    bool setup(const std::string & logger_name) override;
     
     const char* name() const override;
 
+protected:
+    void output(const std::string & logger_name, LogLevel level, std::string const &msg) override;
+    void on_level_changed(LogLevel level) override;
+
 private:
-    std::unique_ptr<SpdlogSinkImpl> pimpl_;
-    std::string name_;
-    LogLevel level_;
+    std::unique_ptr<SpdlogSinkImpl, SpdlogSinkImplDeleter> pimpl_;
     int sink_type_;
     std::string filepath_;
     bool async_;

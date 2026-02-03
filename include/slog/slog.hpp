@@ -4,7 +4,7 @@
 /**
  * @file slog.hpp
  * @author Liu Chuansen (179712066@qq.com)
- * @brief 日志库头文件，支持stdout输出
+ * @brief Simple Log 全局头文件声明
  * @version 0.2
  * @date 2023-05-25
  * 
@@ -143,26 +143,111 @@ inline LogLevel log_level_from_name(std::string const &level, LogLevel default_l
 class LoggerSink
 {
 public:    
+    /// @brief 构造函数
+    /// @param level 日志等级
+    explicit LoggerSink(LogLevel level) : level_(level), rule_level_(LogLevel::Unknown) {}
+    
     virtual ~LoggerSink() = default;
 
     // 克隆一个SINK，必须保证名称不一样，如果是一样，则返回空指针
-    virtual std::shared_ptr<LoggerSink> clone(std::string const & logger_name) const = 0;
+    // logger_name 为新logger的名称，有些sink，可能需要在setup阶段就设置这个值
+    virtual std::shared_ptr<LoggerSink> clone(const std::string & logger_name) const = 0;
 
-    virtual bool setup(std::string const & logger_name) = 0;
-    virtual void log(LogLevel level, std::string const & msg) = 0;
-    virtual void set_level(LogLevel level) = 0;
-    virtual LogLevel get_level() const = 0;
-    virtual const char * name() const = 0;
+    /// @brief 用于配置sink, 便其生效, clone和logger构造函数中会调用。
+    virtual bool setup(const std::string & logger_name) { 
+        (void)logger_name;
+        return true; 
+    };
+    
+    /// @brief 日志输出函数（非虚函数，统一处理等级检查）
+    /// @param level 日志等级
+    /// @param msg 日志消息
+    void log(const std::string & logger_name, LogLevel level, std::string const & msg);
+    
+    /// @brief 设置日志等级
+    /// @param level 日志等级
+    void set_level(LogLevel level);
+    
+    /// @brief 获取日志等级
+    /// @return 日志等级
+    LogLevel get_level() const;
+    
+    /// @brief 设置规则日志等级
+    /// @param level 规则日志等级
+    void set_rule_level(LogLevel level);
+    
+    /// @brief 获取规则日志logger名称
+    virtual const char* name() const = 0;
+
+protected:
+    /// @brief 实际输出日志的虚函数，子类需要实现此函数
+    /// @param level 日志等级
+    /// @param msg 日志消息
+    virtual void output(const std::string & logger_name, LogLevel level, std::string const & msg) = 0;
+    
+    /// @brief 当日志等级改变时的回调函数，子类可以重写此函数来执行额外操作
+    /// @param level 新的日志等级
+    virtual void on_level_changed(LogLevel level) 
+    {
+        (void)level;  // 默认实现为空，避免未使用参数警告
+    }
+
+    /// @brief 日志等级
+    LogLevel level_;
+    
+    /// @brief 规则日志等级（用于全局规则，Unknown 表示不使用规则）
+    LogLevel rule_level_;
 };
+
+// LoggerSink 非虚函数实现
+inline void LoggerSink::log(const std::string & logger_name, LogLevel level, std::string const & msg)
+{
+    // 确定实际使用的日志等级：如果 rule_level_ 不为 Unknown，则使用两者中的较大值（更严格的限制）
+    LogLevel effective_level = level_;
+    if (rule_level_ != LogLevel::Unknown){
+        // 如果有rule_level, 总是使用rule_level
+        effective_level = rule_level_;
+    }
+    
+    // 等级不允许输出
+    if (static_cast<int>(level) < static_cast<int>(effective_level)){
+        return;
+    }
+    
+    // 调用子类实现的 output 函数
+    output(logger_name, level, msg);
+}
+
+inline void LoggerSink::set_level(LogLevel level)
+{
+    level_ = level;
+    rule_level_ = LogLevel::Unknown;  // 重置规则等级
+    on_level_changed(level);
+}
+
+inline LogLevel LoggerSink::get_level() const
+{
+    return (rule_level_ != LogLevel::Unknown) ? rule_level_ : level_;
+}
+
+inline void LoggerSink::set_rule_level(LogLevel level)
+{
+    rule_level_ = level;
+}
+
+
+namespace detail {
+class LoggerRegistry;
+}
 
 /**
  * @brief Logger对象声明
  * 
  */
-class Logger
-{
-
+class Logger{
 public:
+    friend class detail::LoggerRegistry;
+
     /// 共享指针
     using SharedPtr = std::shared_ptr<Logger>; 
 
@@ -363,6 +448,9 @@ private:
     /// @return 最小等级
     void update_filter_level();
 
+    /// @brief 重置规则日志等级
+    /// @param level 规则日志等级
+    void set_rule_level(LogLevel level);
 };
 
 

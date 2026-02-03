@@ -63,25 +63,27 @@ public:
                   std::string const & filepath,
                   size_t max_file_size = 10 * 1024 * 1024,  // 10MB
                   size_t max_files = 5,
-                  bool flush_on_write = true);
+                  bool flush_on_write = true)
+        : LoggerSink(level)
+        , filepath_(filepath)
+        , max_file_size_(max_file_size)
+        , max_files_(max_files)
+        , flush_on_write_(flush_on_write)
+    {
+    }
 
-    std::shared_ptr<LoggerSink> clone(std::string const & logger_name) const override;
+    std::shared_ptr<LoggerSink> clone(const std::string & logger_name) const override;
 
-    bool setup(std::string const & name) override;
-
-    void log(LogLevel level, std::string const &msg) override;
-
-    void set_level(LogLevel level) override;
-
-    LogLevel get_level() const override;
+    bool setup(const std::string & logger_name) override;
 
     const char* name() const override;
 
     ~File();
 
+protected:
+    void output(const std::string & logger_name, LogLevel level, std::string const &msg) override;
+
 private:
-    std::string name_;
-    LogLevel level_;
     std::string filepath_;
     size_t max_file_size_;
     size_t max_files_;
@@ -103,15 +105,12 @@ private:
      * 注意：调用此函数前必须已获取file_mutex
      */
     static std::shared_ptr<SharedFileState> get_shared_file_state(
-        std::string const & filepath,
-        size_t max_file_size,
-        size_t max_files,
-        bool flush_on_write);
+        std::string const & filepath, size_t max_file_size, size_t max_files, bool flush_on_write);
 
     /**
      * @brief 格式化日志消息
      */
-    std::string format_log_message(LogLevel level, std::string const &msg);
+    std::string format_log_message(const std::string & logger_name, LogLevel level, std::string const &msg);
 
     /**
      * @brief 执行文件rotation

@@ -135,7 +135,7 @@ void Logger::log(LogLevel level, std::string const &msg)
     // 遍历所有sink
     for (auto& sink : sinks_)
     {
-        sink->log(level, msg);
+        sink->log(name_,level, msg);
     }
 }
 
@@ -150,7 +150,7 @@ void Logger::log(LogLevel level, const char* msg)
     std::string msg_str(msg);
     for (auto& sink : sinks_)
     {
-        sink->log(level, msg);
+        sink->log(name_, level, msg);
     }
 }
 
@@ -224,7 +224,7 @@ void Logger::log_data(LogLevel level, void const *data, size_t size, std::string
     for (size_t offset = 0; offset < size; offset += size_per_line)
     {
         // Print address (8 hex digits)
-        char addr_buf[16];
+        char addr_buf[24];
         std::snprintf(addr_buf, sizeof(addr_buf), "%04zx  ", offset);
         hex += addr_buf;
         
@@ -274,7 +274,7 @@ void Logger::log_data(LogLevel level, void const *data, size_t size, std::string
     // 遍历所有sink
     for (auto& sink : sinks_)
     {
-        sink->log(level, full_msg);
+        sink->log(name_, level, full_msg);
     }
 }
 
@@ -287,7 +287,7 @@ void Logger::log_limited(std::string const &tag, int allowed_num, LogLevel level
         // 遍历所有sink
         for (auto& sink : sinks_)
         {
-            sink->log(level, final_msg);
+            sink->log(name_, level, final_msg);
         }
     }
 }
@@ -342,6 +342,23 @@ void Logger::update_filter_level()
             }
         }
     }
+    __debug("update filter level: min=%s, max=%s", log_level_name(min_level_), log_level_name(max_level_));
+}
+
+/**
+ * @brief 设定所有规则等级
+ * 
+ * @param level 
+ */
+void Logger::set_rule_level(LogLevel level)
+{
+    __debug("set rule level to %s", log_level_name(level));
+    for (auto& sink : sinks_){
+        if (sink){
+            sink->set_rule_level(level);
+        }
+    }
+    update_filter_level();
 }
 
 
@@ -361,6 +378,8 @@ std::shared_ptr<Logger> Logger::clone(std::string const & logger_name) const
             auto cloned = sink->clone(logger_name);
             if (cloned)
             {
+                // 重置规则等级，避免继承父logger的规则等级
+                cloned->set_rule_level(LogLevel::Unknown);
                 cloned_sinks.push_back(cloned);
             }
         }
@@ -500,7 +519,7 @@ public:
         // 应用全局日志等级规则（如果存在匹配的规则）
         auto level = detail::LoggerRegistry::instance().get_logger_level_rule(logger->name());
         if (level != LogLevel::Unknown) {
-            logger->set_level(level);
+            logger->set_rule_level(level);
         }
 
         std::lock_guard<std::mutex> lock(mutex_);
@@ -783,7 +802,7 @@ private:
                     __debug("try match regex rule: %s to logger: %s", pattern.c_str(), pair.first.c_str());
                     if (std::regex_match(pair.first, regex_pattern)) {
                         auto logger = pair.second;
-                        logger->set_level(level);
+                        logger->set_rule_level(level);
                         __debug("apply regex level rule to logger: %s", pair.first.c_str());
                     }
                 }
@@ -795,7 +814,7 @@ private:
             for (auto& pair : registry_) {
                 if (pair.first == pattern) {
                     auto logger = pair.second;
-                    logger->set_level(level);
+                    logger->set_rule_level(level);
                     __debug("apply exact level rule to logger: %s", pair.first.c_str());
                 }
             }

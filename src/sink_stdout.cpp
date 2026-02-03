@@ -22,37 +22,17 @@
 namespace slog {
 namespace sink {
 
-Stdout::Stdout(LogLevel level) : level_(level) 
-{
-}
 
-std::shared_ptr<LoggerSink> Stdout::clone(std::string const & logger_name) const 
+std::shared_ptr<LoggerSink> Stdout::clone(const std::string & logger_name) const 
 {
-    // 如果名称一样，则返回空
-    if (logger_name == name_)
-    {
-        return nullptr;
-    }
-
     auto sink = std::make_shared<Stdout>(level_);
     sink->setup(logger_name);
     return sink;
 }
 
-bool Stdout::setup(std::string const & name) 
-{
-    name_ = name;
-    return true;
-}
 
-void Stdout::log(LogLevel level, std::string const &msg) 
+void Stdout::output(const std::string & logger_name, LogLevel level, std::string const &msg) 
 {    
-    // 等级不允许输出
-    if (static_cast<int>(level) < static_cast<int>(level_))
-    {
-        return;
-    }
-    
     // 使用全局锁保护所有 stdout 输出，确保多线程环境下日志不会交错
     std::lock_guard<std::mutex> lock(get_stdout_mutex());
     
@@ -99,23 +79,13 @@ void Stdout::log(LogLevel level, std::string const &msg)
 #endif // SLOG_STDOUT_COLOR
 
     // output log level
-    oss << " <" << log_level_name(level) << "> (" << name_ << ") ";
+    oss << " <" << log_level_name(level) << "> (" << logger_name << ") ";
 
 #if SLOG_STDOUT_COLOR
     std::cout << oss.str() << msg << _RESET << std::endl;
 #else
     std::cout << oss.str() << msg << std::endl;
 #endif // SLOG_STDOUT_COLOR
-}
-
-void Stdout::set_level(LogLevel level) 
-{
-    level_ = level;
-}
-
-LogLevel Stdout::get_level() const 
-{ 
-    return level_; 
 }
 
 const char* Stdout::name() const 
@@ -125,8 +95,8 @@ const char* Stdout::name() const
 
 std::mutex& Stdout::get_stdout_mutex() 
 {
-    static std::mutex mtx;
-    return mtx;
+    static std::mutex s_stdout_mutex;
+    return s_stdout_mutex;
 }
 
 } // namespace sink

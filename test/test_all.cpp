@@ -600,6 +600,11 @@ void test_global_logger_level_rules() {
     logger1->trace("Trace message (should not appear, level is Debug)");
     logger1->debug("Debug message (should appear)");
     logger1->info("Info message (should appear)");
+    auto logger1a = slog::get_logger("clone_logger");
+    // rule level should affect cloned logger
+    std::cout << "logger1a level: " << slog::log_level_name(logger1a->get_level()) << std::endl;
+    logger1a->debug("Debug message (should not appear)");
+    logger1a->error("Error message (should appear)");
     
     // Test 2: Set rule after creating logger (exact match)
     std::cout << "\nTest 2: Set rule after creating logger (exact match):" << std::endl;
@@ -610,6 +615,12 @@ void test_global_logger_level_rules() {
     std::cout << "Rule set to Info, level should change:" << std::endl;
     std::cout << "  Actual level: " << slog::log_level_name(logger2->get_level()) << std::endl;
     logger2->info("Info message after rule (should appear)");
+
+    auto logger2a = logger2->clone("clone2_logger");
+    // rule level should affect cloned logger
+    std::cout << "logger2a level: " << slog::log_level_name(logger2a->get_level()) << std::endl;
+    logger2a->info("Debug message (should not appear)");
+    logger2a->error("Error message (should appear)");
     
     // Test 3: Regex pattern matching - match all loggers ending with "_debug"
     std::cout << "\nTest 3: Regex pattern matching (.*_debug):" << std::endl;
