@@ -5,7 +5,30 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [0.3] - 2025-12-04
+## [v0.5] - 2026-02-04
+
+### 重构
+
+- 重构日志Sink基类的实现，引入rule_level的概念，为了解决全局日志等级继承的问题
+
+### 问题修正
+
+- 旧版本的全局日志等级，会影响clone的logger对象
+比如：设定全局logger等级为：service_main:Debug, 它会将由service_main克隆的logger的日志等级也修改为Debug。
+
+
+
+## [v0.4] - 2026-01-21
+
+### 新增功能
+
+- 支持多行日志输出函数 log_lines()
+
+### 问题修正
+
+- 修复dump()函数不起作用的问题
+
+## [v0.3] - 2025-12-04
 
 ### 新增功能
 

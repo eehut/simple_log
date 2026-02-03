@@ -4,7 +4,7 @@
 # date: 2025-12-04
 
 cmake_minimum_required(VERSION 3.10)
-project(simple_log VERSION 0.4 LANGUAGES CXX)
+project(simple_log VERSION 0.5 LANGUAGES CXX)
 
 # Set C++ standard
 # Default to C++14 for compatibility with older compilers (e.g., gcc 7.5)

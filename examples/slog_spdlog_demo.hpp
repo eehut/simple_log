@@ -49,7 +49,7 @@ class SpdlogDemo: public LoggerSink
 {
 public:
     explicit SpdlogDemo(LogLevel level, std::string const & log_files_dir = "/tmp", bool console = false)
-        : level_(level), log_files_dir_(log_files_dir), console_(console), logger_(nullptr)
+        : LoggerSink(level), log_files_dir_(log_files_dir), console_(console), logger_(nullptr)
     {
     }
     
@@ -136,8 +136,9 @@ public:
         return true;
     }
     
-    void log(LogLevel level, std::string const &msg) override
+    void output(const std::string & logger_name, LogLevel level, std::string const &msg) override
     {
+        (void)logger_name;
         // Check if level is allowed
         if (static_cast<int>(level) < static_cast<int>(level_)) {
             return;
@@ -152,19 +153,6 @@ public:
         
         // Log using spdlog
         logger_->log(spdlog_level, msg);
-    }
-    
-    void set_level(LogLevel level) override
-    {
-        level_ = level;
-        if (logger_) {
-            logger_->set_level(to_spdlog_level(level));
-        }
-    }
-    
-    LogLevel get_level() const override
-    {
-        return level_;
     }
     
     const char* name() const override
