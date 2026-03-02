@@ -678,6 +678,12 @@ int apply_logger_rules(const std::string& rule_text);
  */
 std::map<std::string, LogLevel> get_logger_rules();
 
+/**
+ * @brief 清除所有日志规则，包括精确匹配和正则匹配
+ * 
+ */
+void reset_logger_rules();
+
 
 template<typename... Args>
 inline void log(LogLevel level, fmt::format_string<Args...> fmt, Args &&...args)

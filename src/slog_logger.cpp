@@ -763,6 +763,13 @@ public:
         return all_rules;
     }
 
+    void reset_logger_rules()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        level_rules_.clear();
+        regex_level_rules_.clear();
+    }
+
 private:
     /**
      * @brief 应用规则到已存在的 logger
@@ -1048,6 +1055,11 @@ int apply_logger_rules(const std::string& rule_text)
 std::map<std::string, LogLevel> get_logger_rules()
 {
     return detail::LoggerRegistry::instance().get_logger_rules();
+}
+
+void reset_logger_rules()
+{
+    detail::LoggerRegistry::instance().reset_logger_rules();
 }
 
 } // namespace slog
