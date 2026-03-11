@@ -5,6 +5,29 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.6-rc1] - 2026-03-12
+
+### 新增功能
+
+- **Logger 列表查询**：新增 `get_logger_list()` 全局函数
+  - 获取所有已注册 logger 的名称列表
+  - 支持运行时动态查询 logger 状态
+  - 适用于 Foxglove 等需要动态参数管理的场景
+  - 线程安全实现
+
+### 改进
+
+- **编译时检查**：全面启用 `FMT_STRING` 宏
+  - 所有日志格式化字符串添加 `FMT_STRING` 包装
+  - 编译阶段即可发现格式化参数不匹配问题
+  - 提高代码安全性和可维护性
+
+### 技术细节
+
+- 在 `LoggerRegistry` 类中实现 `get_logger_list()` 方法
+- 使用互斥锁保证线程安全
+- 返回值预分配内存，优化性能
+
 ## [v0.5] - 2026-02-04
 
 ### 重构
