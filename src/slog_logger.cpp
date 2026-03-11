@@ -763,11 +763,27 @@ public:
         return all_rules;
     }
 
-    void reset_logger_rules()
+    void clear_logger_rules()
     {
         std::lock_guard<std::mutex> lock(mutex_);
         level_rules_.clear();
         regex_level_rules_.clear();
+    }
+
+    /**
+     * @brief 获取所有 logger 的名称列表
+     * 
+     * @return std::vector<std::string> 所有 logger 的名称列表
+     */
+    std::vector<std::string> get_logger_list() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::vector<std::string> logger_names;
+        logger_names.reserve(registry_.size());
+        for (const auto& pair : registry_) {
+            logger_names.push_back(pair.first);
+        }
+        return logger_names;
     }
 
 private:
@@ -1057,9 +1073,14 @@ std::map<std::string, LogLevel> get_logger_rules()
     return detail::LoggerRegistry::instance().get_logger_rules();
 }
 
-void reset_logger_rules()
+void clear_logger_rules()
 {
-    detail::LoggerRegistry::instance().reset_logger_rules();
+    detail::LoggerRegistry::instance().clear_logger_rules();
+}
+
+std::vector<std::string> get_logger_list()
+{
+    return detail::LoggerRegistry::instance().get_logger_list();
 }
 
 } // namespace slog

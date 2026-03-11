@@ -233,6 +233,8 @@ inline LogLevel LoggerSink::get_level() const
 inline void LoggerSink::set_rule_level(LogLevel level)
 {
     rule_level_ = level;
+    // 一些sink, 更新等级后需要通知子类更新等级
+    on_level_changed(level);
 }
 
 
@@ -682,7 +684,14 @@ std::map<std::string, LogLevel> get_logger_rules();
  * @brief 清除所有日志规则，包括精确匹配和正则匹配
  * 
  */
-void reset_logger_rules();
+void clear_logger_rules();
+
+/**
+ * @brief 获取所有 logger 的名称列表
+ * 
+ * @return std::vector<std::string> 所有 logger 的名称列表
+ */
+std::vector<std::string> get_logger_list();
 
 
 template<typename... Args>
