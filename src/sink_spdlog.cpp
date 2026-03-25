@@ -143,7 +143,7 @@ bool Spdlog::setup(const std::string & logger_name)
         logger->flush_on(spdlog::level::trace);
         
         // Set level
-        logger->set_level(to_spdlog_level(level_));
+        logger->set_level(spdlog::level::trace);
         
         pimpl_ = std::unique_ptr<SpdlogSinkImpl, SpdlogSinkImplDeleter>(new SpdlogSinkImpl(logger, async_));
         
@@ -171,9 +171,10 @@ void Spdlog::output(const std::string & logger_name, LogLevel level, std::string
 
 void Spdlog::on_level_changed(LogLevel level) 
 {
-    if (pimpl_ && pimpl_->logger) {
-        pimpl_->logger->set_level(to_spdlog_level(level));
-    }
+    (void)level;
+    //if (pimpl_ && pimpl_->logger) {
+    //    pimpl_->logger->set_level(to_spdlog_level(level));
+    //}
 }
 
 const char* Spdlog::name() const 
