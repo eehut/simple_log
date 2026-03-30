@@ -23,7 +23,13 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <mutex>
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 #include <unordered_map>
 #include <map>
 
@@ -134,6 +140,111 @@ inline LogLevel log_level_from_name(std::string const &level, LogLevel default_l
     }
 
     return default_level;
+}
+
+/**
+ * @brief 将日志路径模板展开为实际路径（多实例共用同一份配置时常用）。
+ *
+ * 时间与 File/Stdout sink 一致：std::chrono::system_clock + std::localtime。
+ *
+ * 占位符（均为 ASCII，小写为主；年份用 %Y）：
+ * - %%  字面量 %
+ * - %Y  四位年份
+ * - %m  两位月份 01–12
+ * - %d  两位日 01–31
+ * - %H  两位小时 00–23（24 小时制）
+ * - %M  两位分钟 00–59
+ * - %S  两位秒 00–59
+ * - %h  主机名（POSIX：gethostname；Windows：环境变量 COMPUTERNAME，否则 "unknown"）
+ * - %p  进程 PID
+ * - %n  毫秒，三位十进制（与 sink_file / sink_stdout 日志行时间戳一致）
+ *
+ * 未识别的 %x 原样保留 `%` 与后续字符。
+ */
+inline std::string format_log_filename(std::string const &pattern)
+{
+    auto const pid_string = []() -> std::string {
+#if defined(_WIN32)
+        return fmt::format("{}", static_cast<long>(_getpid()));
+#else
+        return fmt::format("{}", static_cast<long>(getpid()));
+#endif
+    }();
+
+    auto const host_string = []() -> std::string {
+#if defined(_WIN32)
+        if (char const *e = std::getenv("COMPUTERNAME")) {
+            return std::string(e);
+        }
+        return "unknown";
+#else
+        char buf[256];
+        if (gethostname(buf, sizeof(buf)) == 0) {
+            return std::string(buf);
+        }
+        return "unknown";
+#endif
+    }();
+
+    auto const now = std::chrono::system_clock::now();
+    auto const ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch()).count();
+    std::time_t const tt = std::chrono::system_clock::to_time_t(now);
+    std::tm const tm = *std::localtime(&tt);
+
+    std::string out;
+    out.reserve(pattern.size() + 48);
+
+    for (size_t i = 0; i < pattern.size(); ++i) {
+        char const c = pattern[i];
+        if (c != '%' || i + 1 >= pattern.size()) {
+            out.push_back(c);
+            continue;
+        }
+        char const n = pattern[i + 1];
+        if (n == '%') {
+            out.push_back('%');
+            ++i;
+            continue;
+        }
+
+        switch (n) {
+        case 'Y':
+            out += fmt::format("{:04d}", tm.tm_year + 1900);
+            break;
+        case 'm':
+            out += fmt::format("{:02d}", tm.tm_mon + 1);
+            break;
+        case 'd':
+            out += fmt::format("{:02d}", tm.tm_mday);
+            break;
+        case 'H':
+            out += fmt::format("{:02d}", tm.tm_hour);
+            break;
+        case 'M':
+            out += fmt::format("{:02d}", tm.tm_min);
+            break;
+        case 'S':
+            out += fmt::format("{:02d}", tm.tm_sec);
+            break;
+        case 'h':
+            out += host_string;
+            break;
+        case 'p':
+            out += pid_string;
+            break;
+        case 'n':
+            out += fmt::format("{:03d}", ms % 1000);
+            break;
+        default:
+            out.push_back('%');
+            out.push_back(n);
+            break;
+        }
+        ++i;
+    }
+
+    return out;
 }
 
 /**
@@ -288,6 +399,9 @@ public:
     /// @param level 
     /// @return 
     bool is_allowed(LogLevel level) const noexcept;
+
+    /// @brief All sinks completed setup successfully (false if any sink setup failed)
+    bool is_valid() const noexcept { return valid_; }
 
     /// @brief 显示指定日志
     /// @param level 日志等级

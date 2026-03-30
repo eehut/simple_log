@@ -362,86 +362,6 @@ void Logger::set_rule_level(LogLevel level)
 }
 
 
-std::shared_ptr<Logger> Logger::clone(std::string const & logger_name) const
-{
-    if (logger_name == name_)
-    {
-        return default_logger();
-    }
-    
-    // 克隆所有sink
-    std::vector<std::shared_ptr<LoggerSink>> cloned_sinks;
-    for (auto& sink : sinks_)
-    {
-        if (sink)
-        {
-            auto cloned = sink->clone(logger_name);
-            if (cloned)
-            {
-                // 重置规则等级，避免继承父logger的规则等级
-                cloned->set_rule_level(LogLevel::Unknown);
-                cloned_sinks.push_back(cloned);
-            }
-        }
-    }
-    
-    if (cloned_sinks.empty())
-    {
-        return default_logger();
-    }
-
-    __debug("clone logger: %s", logger_name.c_str());
-
-    auto logger = std::make_shared<Logger>();
-    logger->name_ = logger_name;
-    logger->sinks_ = cloned_sinks;
-    logger->valid_ = true;
-    logger->update_filter_level();
-    register_logger(logger);
-
-    return logger;
-}
-
-std::shared_ptr<Logger> Logger::clone(std::string const & logger_name, LogLevel level) const
-{
-    if (logger_name == name_)
-    {
-        return default_logger();
-    }
-    
-    // 克隆所有sink
-    std::vector<std::shared_ptr<LoggerSink>> cloned_sinks;
-    for (auto& sink : sinks_)
-    {
-        if (sink)
-        {
-            auto cloned = sink->clone(logger_name);
-            if (cloned)
-            {
-                cloned->set_level(level);
-                cloned_sinks.push_back(cloned);
-            }
-        }
-    }
-    
-    if (cloned_sinks.empty())
-    {
-        return default_logger();
-    }
-
-    __debug("clone logger: %s", logger_name.c_str());
-
-    auto logger = std::make_shared<Logger>();
-    logger->name_ = logger_name;
-    logger->sinks_ = cloned_sinks;
-    logger->valid_ = true;
-    logger->update_filter_level();
-    register_logger(logger);
-
-    return logger;
-}
-
-
 namespace detail
 {
 
@@ -859,6 +779,90 @@ private:
 
 } // namespace detail
 
+std::shared_ptr<Logger> Logger::clone(std::string const & logger_name) const
+{
+    if (!valid_) {
+        return detail::LoggerRegistry::instance().get_default(logger_name);
+    }
+
+    if (logger_name == name_)
+    {
+        return default_logger();
+    }
+
+    std::vector<std::shared_ptr<LoggerSink>> cloned_sinks;
+    for (auto& sink : sinks_)
+    {
+        if (sink)
+        {
+            auto cloned = sink->clone(logger_name);
+            if (cloned)
+            {
+                cloned->set_rule_level(LogLevel::Unknown);
+                cloned_sinks.push_back(cloned);
+            }
+        }
+    }
+
+    if (cloned_sinks.empty())
+    {
+        return default_logger();
+    }
+
+    __debug("clone logger: %s", logger_name.c_str());
+
+    auto logger = std::make_shared<Logger>();
+    logger->name_ = logger_name;
+    logger->sinks_ = cloned_sinks;
+    logger->valid_ = true;
+    logger->update_filter_level();
+    register_logger(logger);
+
+    return logger;
+}
+
+std::shared_ptr<Logger> Logger::clone(std::string const & logger_name, LogLevel level) const
+{
+    if (!valid_) {
+        return detail::LoggerRegistry::instance().get_default(logger_name);
+    }
+
+    if (logger_name == name_)
+    {
+        return default_logger();
+    }
+
+    std::vector<std::shared_ptr<LoggerSink>> cloned_sinks;
+    for (auto& sink : sinks_)
+    {
+        if (sink)
+        {
+            auto cloned = sink->clone(logger_name);
+            if (cloned)
+            {
+                cloned->set_level(level);
+                cloned_sinks.push_back(cloned);
+            }
+        }
+    }
+
+    if (cloned_sinks.empty())
+    {
+        return default_logger();
+    }
+
+    __debug("clone logger: %s", logger_name.c_str());
+
+    auto logger = std::make_shared<Logger>();
+    logger->name_ = logger_name;
+    logger->sinks_ = cloned_sinks;
+    logger->valid_ = true;
+    logger->update_filter_level();
+    register_logger(logger);
+
+    return logger;
+}
+
 // Global function implementations
 std::shared_ptr<Logger> default_logger() {
     return detail::LoggerRegistry::instance().get_default();
@@ -902,8 +906,10 @@ void drop_logger(const std::string& name)
 std::shared_ptr<Logger> make_logger(const std::string& name, std::shared_ptr<LoggerSink> sink) 
 {
     auto logger = std::make_shared<Logger>(name, sink);
-    if (logger && register_logger(logger))
-    {
+    if (!logger || !logger->is_valid()) {
+        return nullptr;
+    }
+    if (register_logger(logger)) {
         return logger;
     }
     return nullptr;
@@ -912,8 +918,10 @@ std::shared_ptr<Logger> make_logger(const std::string& name, std::shared_ptr<Log
 std::shared_ptr<Logger> make_logger(std::string const &name, std::vector<std::shared_ptr<LoggerSink>> sinks)
 {
     auto logger = std::make_shared<Logger>(name, sinks);
-    if (logger && register_logger(logger))
-    {
+    if (!logger || !logger->is_valid()) {
+        return nullptr;
+    }
+    if (register_logger(logger)) {
         return logger;
     }
     return nullptr;

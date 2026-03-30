@@ -78,6 +78,9 @@ Spdlog & Spdlog::operator=(Spdlog &&) noexcept = default;
 
 std::shared_ptr<LoggerSink> Spdlog::clone(std::string const & logger_name) const 
 {
+    if (!pimpl_ || !pimpl_->logger) {
+        return nullptr;
+    }
     // Create a new sink with same configuration
     auto sink = std::make_shared<Spdlog>(level_, sink_type_, filepath_, async_);
     // 使用spdlog自带的clone实现，避免重复打开相同文件的问题
@@ -147,7 +150,9 @@ bool Spdlog::setup(const std::string & logger_name)
         
         pimpl_ = std::unique_ptr<SpdlogSinkImpl, SpdlogSinkImplDeleter>(new SpdlogSinkImpl(logger, async_));
         
-    } catch (const spdlog::spdlog_ex& ex) {
+    } catch (const spdlog::spdlog_ex&) {
+        return false;
+    } catch (...) {
         return false;
     }
     
