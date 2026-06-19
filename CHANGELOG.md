@@ -5,7 +5,7 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [v0.6-rc1] - 2026-03-12
+## [v0.6] - 2026-06-19
 
 ### 新增功能
 
@@ -22,11 +22,33 @@
   - 编译阶段即可发现格式化参数不匹配问题
   - 提高代码安全性和可维护性
 
+- **spdlog 等级控制统一化**
+  - `spdlog` sink 不再独立维护一套和 `slog` 分离的等级过滤逻辑
+  - 日志等级过滤统一由 `slog` 管理，避免两套等级状态不一致
+  - sink 等级变更时会同步更新到底层 `spdlog logger`
+
+- **日志路径模板展开增强**
+  - 增加日志路径模板展开能力，支持按时间、主机名、进程号、毫秒生成日志文件名
+  - 便于多实例部署时复用同一份日志路径配置
+  - 与 file/stdout sink 的时间来源保持一致
+
+- **Logger 有效性处理增强**
+  - 增强 logger/sink 初始化有效性校验
+  - 改进默认 logger 回退逻辑，降低 sink 初始化失败时的使用风险
+
+- **构建兼容性与安装导出改进**
+  - `spdlog` 相关目标改为链接 `spdlog::spdlog_header_only`
+  - 同时使用外部 `fmt` 和 `spdlog` 时自动定义 `SPDLOG_FMT_EXTERNAL=1`
+  - examples 构建按 `BUILD_WITH_SPDLOG` 条件启用
+  - 安装后的 `slogConfig.cmake` 自动转发 `fmt`/`spdlog` 依赖，修复下游 `find_package(slog)` 失败问题
+  - README 增补不同 `fmt`/`spdlog` 环境下的推荐构建方式
+
 ### 技术细节
 
 - 在 `LoggerRegistry` 类中实现 `get_logger_list()` 方法
 - 使用互斥锁保证线程安全
 - 返回值预分配内存，优化性能
+- 补全 `SLOG_SINK_SPDLOG` / `SLOG_EXTERNAL_LIBFMT` 4 种组合的构建验证
 
 ## [v0.5] - 2026-02-04
 
