@@ -29,6 +29,7 @@ trap cleanup EXIT
 # Test configurations @0 SPDLOG @1 LIBFMT
 declare -a configs=(
     "ON ON"
+    "ON OFF"
     "OFF ON"
     "OFF OFF"
 )
@@ -85,4 +86,3 @@ done
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}All configuration tests passed!${NC}"
 echo -e "${GREEN}========================================${NC}"
-

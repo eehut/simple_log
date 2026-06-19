@@ -37,6 +37,7 @@ target_compile_definitions(slog_static PUBLIC
     SLOG_STDOUT_COLOR=$<IF:$<BOOL:${SLOG_STDOUT_COLOR}>,1,0>
     $<IF:$<BOOL:${BUILD_WITH_SPDLOG}>,BUILD_WITH_SPDLOG=1,>
     $<IF:$<BOOL:${BUILD_WITH_LIBFMT}>,BUILD_WITH_LIBFMT=1,>
+    $<IF:$<AND:$<BOOL:${BUILD_WITH_SPDLOG}>,$<BOOL:${BUILD_WITH_LIBFMT}>>,SPDLOG_FMT_EXTERNAL=1,>
 )
 
 # Link fmt library and ensure its include directories are used
@@ -62,6 +63,7 @@ target_compile_definitions(slog PUBLIC
     SLOG_STDOUT_COLOR=$<IF:$<BOOL:${SLOG_STDOUT_COLOR}>,1,0>
     $<IF:$<BOOL:${BUILD_WITH_SPDLOG}>,BUILD_WITH_SPDLOG=1,>
     $<IF:$<BOOL:${BUILD_WITH_LIBFMT}>,BUILD_WITH_LIBFMT=1,>
+    $<IF:$<AND:$<BOOL:${BUILD_WITH_SPDLOG}>,$<BOOL:${BUILD_WITH_LIBFMT}>>,SPDLOG_FMT_EXTERNAL=1,>
 )
 
 # Link fmt library
@@ -71,9 +73,9 @@ endif()
 
 # Link spdlog if enabled
 if(BUILD_WITH_SPDLOG)
-    # Use PUBLIC to propagate spdlog dependency to users of slog
-    target_link_libraries(slog_static PUBLIC spdlog::spdlog)
-    target_link_libraries(slog PUBLIC spdlog::spdlog)
+    # Use header-only spdlog to avoid non-PIC static spdlog linkage issues.
+    target_link_libraries(slog_static PUBLIC spdlog::spdlog_header_only)
+    target_link_libraries(slog PUBLIC spdlog::spdlog_header_only)
 endif()
 
 # Alias targets for convenience

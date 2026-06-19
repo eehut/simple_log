@@ -1,5 +1,16 @@
 @PACKAGE_INIT@
 
+include(CMakeFindDependencyMacro)
+
+# Load transitive dependencies used by exported targets.
+if(@BUILD_WITH_LIBFMT@)
+    find_dependency(fmt REQUIRED)
+endif()
+
+if(@BUILD_WITH_SPDLOG@)
+    find_dependency(spdlog REQUIRED)
+endif()
+
 # Include the exported targets
 include("${CMAKE_CURRENT_LIST_DIR}/slogTargets.cmake")
 
@@ -15,4 +26,3 @@ if(TARGET slog::slog)
 elseif(TARGET slog::slog_static)
     set(SLOG_LIBRARIES slog::slog_static)
 endif()
-

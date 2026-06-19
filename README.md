@@ -2,6 +2,169 @@
 
 一个轻量级、高性能的 C++ 日志库，提供简洁的 API 和丰富的功能特性。
 
+## 构建说明
+
+### CMake 选项
+
+项目当前暴露 4 个主要构建选项：
+
+- `SLOG_SINK_SPDLOG=ON|OFF`
+  - 是否尝试启用基于 `spdlog` 的 sink，默认 `ON`
+  - 这是“尝试启用”而不是“强制启用”：如果系统里找不到 `spdlog`，配置阶段会自动降级为不启用 `spdlog`
+- `SLOG_EXTERNAL_LIBFMT=ON|OFF`
+  - 是否优先使用系统 `fmt`，默认 `ON`
+  - 如果系统里找不到 `fmt`，会自动回退到仓库内置的 `fmt`
+- `SLOG_BUILD_EXAMPLES=ON|OFF`
+  - 是否编译 examples，默认 `OFF`
+- `SLOG_BUILD_TEST=ON|OFF`
+  - 是否编译 tests，默认 `OFF`
+
+推荐始终使用 out-of-tree 构建，例如：
+
+```bash
+cmake -S . -B build
+cmake --build build -j
+```
+
+### 依赖行为
+
+当前工程支持以下依赖策略：
+
+- `fmt`
+  - 有系统 `fmt` 时，默认优先使用外部 `fmt`
+  - 没有系统 `fmt` 时，自动回退到仓库内置 `fmt`
+- `spdlog`
+  - 只有在检测到系统 `spdlog` 时才会真正编译 `spdlog` sink
+  - 未检测到时，`slog` 主体功能仍可正常构建，只是没有 `spdlog` 相关 API
+
+如果同时启用了外部 `fmt` 和 `spdlog`，构建系统会自动为 `spdlog` 传递 `SPDLOG_FMT_EXTERNAL=1`。
+如果启用了 `spdlog`，工程会链接 `spdlog::spdlog_header_only`，以避免把非 PIC 的 `libspdlog.a` 链接进 `libslog.so` 时出现兼容性问题。
+
+### 推荐构建组合
+
+#### 1. 最推荐：系统 `fmt` + 系统 `spdlog`
+
+适合开发机、CI、Ubuntu/Debian 等有完整包管理器的环境。
+
+```bash
+sudo apt-get install -y libfmt-dev libspdlog-dev
+cmake -S . -B build \
+  -DSLOG_SINK_SPDLOG=ON \
+  -DSLOG_EXTERNAL_LIBFMT=ON \
+  -DSLOG_BUILD_EXAMPLES=ON \
+  -DSLOG_BUILD_TEST=ON
+cmake --build build -j
+```
+
+特点：
+
+- 使用系统 `fmt`
+- 启用 `spdlog` sink
+- 安装后下游 `find_package(slog)` 也会自动解析 `fmt` 和 `spdlog` 依赖
+
+#### 2. 最稳妥的最小依赖版本：禁用 `spdlog`，使用内置 `fmt`
+
+适合离线环境、裁剪环境、最少三方依赖场景。
+
+```bash
+cmake -S . -B build \
+  -DSLOG_SINK_SPDLOG=OFF \
+  -DSLOG_EXTERNAL_LIBFMT=OFF
+cmake --build build -j
+```
+
+特点：
+
+- 不依赖系统 `fmt`
+- 不依赖系统 `spdlog`
+- 只提供 `stdout/file/none` sink
+
+#### 3. 系统 `fmt`，禁用 `spdlog`
+
+适合系统里已有 `fmt`，但不希望引入 `spdlog` 的场景。
+
+```bash
+sudo apt-get install -y libfmt-dev
+cmake -S . -B build \
+  -DSLOG_SINK_SPDLOG=OFF \
+  -DSLOG_EXTERNAL_LIBFMT=ON
+cmake --build build -j
+```
+
+#### 4. 启用 `spdlog`，但 `slog` 自身使用内置 `fmt`
+
+```bash
+sudo apt-get install -y libspdlog-dev
+cmake -S . -B build \
+  -DSLOG_SINK_SPDLOG=ON \
+  -DSLOG_EXTERNAL_LIBFMT=OFF \
+  -DSLOG_BUILD_EXAMPLES=ON \
+  -DSLOG_BUILD_TEST=ON
+cmake --build build -j
+```
+
+说明：
+
+- 该组合在当前 Ubuntu 24.04 + `spdlog 1.12.0` 环境下已验证可编译通过
+- 这里的“内置 `fmt`”仅指 `slog` 自身使用内置 `fmt`
+- 系统 `spdlog` 包本身通常仍然依赖系统 `fmt`
+
+### 自动降级行为
+
+以下行为是当前工程刻意支持的：
+
+- `SLOG_EXTERNAL_LIBFMT=ON` 但系统没有 `fmt`
+  - 自动回退到内置 `fmt`
+- `SLOG_SINK_SPDLOG=ON` 但系统没有 `spdlog`
+  - 自动禁用 `spdlog` sink，不影响主库构建
+
+建议关注 CMake 配置输出中的这两行：
+
+```text
+-- Build with libfmt: 9.1.0
+-- Build with spdlog: 1.12.0
+```
+
+或者：
+
+```text
+-- Build with bundled fmt
+-- Build without spdlog supported
+```
+
+### 头文件中的条件编译
+
+`spdlog` 相关 API 只会在构建出的 `slog` target 带有 `BUILD_WITH_SPDLOG` 编译定义时暴露出来：
+
+```cpp
+#ifdef BUILD_WITH_SPDLOG
+auto logger = slog::make_spdlog_logger("app", slog::LogLevel::Info);
+#endif
+```
+
+如果你是通过 CMake 的 `target_link_libraries(your_app PRIVATE slog::slog)` 或 `slog::slog_static` 来链接，相关编译定义会从 `slog` target 传播到你的目标。
+
+### 安装与下游使用
+
+安装：
+
+```bash
+cmake -S . -B build \
+  -DCMAKE_INSTALL_PREFIX=/usr/local
+cmake --build build -j
+cmake --install build
+```
+
+下游项目使用：
+
+```cmake
+find_package(slog REQUIRED CONFIG)
+add_executable(your_app main.cpp)
+target_link_libraries(your_app PRIVATE slog::slog)
+```
+
+如果安装版本是带外部 `fmt` 或 `spdlog` 构建出来的，`slogConfig.cmake` 会自动继续查找这些依赖。
+
 ## 特性
 
 ### ✨ 核心特性
@@ -721,4 +884,3 @@ See [LICENSE](LICENSE) file for details.
 ## 作者
 
 Liu Chuansen (179712066@qq.com)
-
