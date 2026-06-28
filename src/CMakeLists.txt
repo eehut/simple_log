@@ -73,7 +73,7 @@ endif()
 
 # Link spdlog if enabled
 if(BUILD_WITH_SPDLOG)
-    # Use header-only spdlog to avoid non-PIC static spdlog linkage issues.
+    # Use header-only spdlog to avoid linking non-PIC static libspdlog.a into libslog.so.
     target_link_libraries(slog_static PUBLIC spdlog::spdlog_header_only)
     target_link_libraries(slog PUBLIC spdlog::spdlog_header_only)
 endif()

@@ -37,6 +37,7 @@
 #ifdef BUILD_WITH_LIBFMT
 // Use system fmt library
 #include <fmt/format.h>
+#include <fmt/xchar.h>
 #else 
 // Use bundled fmt library
 #include <slog/fmt/format.h>
